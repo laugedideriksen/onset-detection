@@ -1,0 +1,11 @@
+[project]
+name = "onsetextractor"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "debugpy>=1.8.20",
+    "librosa>=0.11.0",
+    "matplotlib>=3.10.9",
+]
