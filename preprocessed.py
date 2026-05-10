@@ -53,21 +53,26 @@ class OnsetDetect:
         return self._sample_rate
 
     def _preprocess(self, threshold, onset_envelope):
+        onset_frames = librosa.util.peak_pick(
+                onset_envelope,
+                pre_avg=3,
+                post_avg=3,
+                pre_max=3,
+                post_max=3,
+                wait=3,
+                delta=0,
+                )
+
         median_floor = np.median(onset_envelope)
         calculated_threshold = threshold * median_floor
-        masked_envelope = np.where(
-            onset_envelope > calculated_threshold, onset_envelope, 0
-        )
-        onset_frames = librosa.util.peak_pick(
-            masked_envelope,
-            pre_avg=3,
-            post_avg=3,
-            pre_max=3,
-            post_max=3,
-            wait=3,
-            delta=0.2,
-        )
-        return onset_frames, masked_envelope[masked_envelope != 0]
+
+        picked_peaks = []
+        for frame in onset_frames:
+            if onset_envelope[frame] > calculated_threshold:
+                picked_peaks.append(frame)
+        picked_peaks = np.array(picked_peaks)
+
+        return picked_peaks, onset_frames, calculated_threshold
 
     def compute_peak_onset(
         self, preemphasis_coefficient=0.97, threshold=False, plot=False
@@ -78,9 +83,11 @@ class OnsetDetect:
         onset_envelope = librosa.onset.onset_strength(y=self.array, sr=self.sample_rate)
 
         if threshold:
-            onset_frames, onset_envelope = self._preprocess(
+            onset_frames, raw_onset_frames, calculated_threshold = self._preprocess(
                 threshold=threshold, onset_envelope=onset_envelope
             )
+            #times = librosa.frames_to_time(onset_frames, sr=self.sample_rate)
+            times_in_envelope = librosa.frames_to_time(np.arange(len(onset_envelope)), sr=self.sample_rate)
             times = librosa.frames_to_time(onset_frames, sr=self.sample_rate)
         else:
             onset_frames = librosa.onset.onset_detect(
@@ -88,7 +95,7 @@ class OnsetDetect:
             )
             times = librosa.times_like(onset_envelope, sr=self.sample_rate)
             times = times[onset_frames]
-        print(len(times), len(onset_envelope), len(onset_frames))
+        #print(times, len(onset_envelope[onset_frames]), len(times))
 
         if plot:
             D = np.abs(librosa.stft(self.array))
@@ -102,17 +109,22 @@ class OnsetDetect:
             )
             ax[0].set(title=f"Power spectrogram: {self.sound_file}")
             ax[0].label_outer()
-            #ax[1].plot(times, onset_envelope, label="Onset strength")
             ax[0].vlines(
-                #times[onset_frames],
                 times,
                 0,
-                8192,
-                color="r",
+                16384,
+                color="g",
                 alpha=0.9,
-                linestyle="--",
+                linestyles="solid",
                 label="Onsets",
             )
+            ax[1].plot(times_in_envelope, onset_envelope, label='Raw Onset Envelope', alpha=0.6)
+            plt.axhline(y=calculated_threshold, color='r', linestyle='--', label=f'Threshold')
+            plt.vlines(times, 0, np.max(onset_envelope), colors='green', linestyles='solid', linewidth=2, label='Valid Onsets')
+            rejected_frames = [f for f in raw_onset_frames if f not in onset_frames]
+            if len(rejected_frames) > 0:
+                plt.vlines(times_in_envelope[rejected_frames], 0, np.max(onset_envelope), colors='orange', linestyles='dotted', linewidth=1, label='Rejected (Below Threshold)')
+            ax[1].legend()
             # ax[1].legend()
             plt.show()
         return times
@@ -162,4 +174,6 @@ class OnsetDetect:
 
 if __name__ == "__main__":
     #print(OnsetDetect('data/rytel-A1.wav').compute_backtrack_onset(plot=True))
-    print(OnsetDetect("data/rytel-A1.wav").compute_peak_onset(threshold=False, plot=True))
+    onset = (OnsetDetect("data/rytel-A1.wav").compute_peak_onset(preemphasis_coefficient=0.97, threshold=1.2, plot=True))
+    for i in onset:
+        print(f"{i},peak_preprocessed")
