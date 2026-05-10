@@ -1,7 +1,8 @@
-import numpy as np
-import librosa
 import os
+import librosa
+import numpy as np
 import matplotlib.pyplot as plt
+from scipy.signal import medfilt
 
 
 class OnsetDetect:
@@ -52,16 +53,19 @@ class OnsetDetect:
     def sample_rate(self):
         return self._sample_rate
 
-    def _preprocess(self, threshold, onset_envelope):
+    def _preprocess(self, threshold, onset_envelope, diff_envelope):
+        if diff_envelope:
+            onset_envelope = self._diff_preprocess(threshold=threshold, onset_envelope=onset_envelope)
         onset_frames = librosa.util.peak_pick(
                 onset_envelope,
                 pre_avg=3,
                 post_avg=3,
-                pre_max=3,
-                post_max=3,
-                wait=3,
-                delta=0,
+                pre_max=2,
+                post_max=2,
+                wait=5,
+                delta=0.25,
                 )
+        print(onset_envelope, onset_frames)
 
         median_floor = np.median(onset_envelope)
         calculated_threshold = threshold * median_floor
@@ -72,7 +76,14 @@ class OnsetDetect:
                 picked_peaks.append(frame)
         picked_peaks = np.array(picked_peaks)
 
-        return picked_peaks, onset_frames, calculated_threshold
+        return picked_peaks, onset_frames, calculated_threshold, onset_envelope
+
+    def _diff_preprocess(self, threshold, onset_envelope):
+        diff_onset_envelope = np.diff(onset_envelope)
+        diff_onset_envelope = np.maximum(0, diff_onset_envelope)
+        diff_onset_envelope = np.concatenate([[0], diff_onset_envelope])
+        smooth_diff_onset_env = medfilt(diff_onset_envelope, kernel_size=5)
+        return smooth_diff_onset_env
 
     def _plot(self, times_in_envelope, times, onset_envelope, raw_onset_frames, onset_frames, threshold, calculated_threshold):
         D = np.abs(librosa.stft(self.array))
@@ -93,24 +104,49 @@ class OnsetDetect:
             16384,
             color="g",
             alpha=0.9,
+            linewidth=1,
             linestyles="solid",
             label="Onsets",
         )
 
         ax[1].plot(times_in_envelope, onset_envelope, label='Raw Onset Envelope', alpha=0.6)
-        plt.vlines(times, 0, np.max(onset_envelope), colors='green', linestyles='solid', linewidth=2, label='Valid Onsets')
+        ax[1].vlines(times, 0, np.max(onset_envelope), colors='green', linestyles='solid', linewidth=1, label='Valid Onsets')
         if threshold:
-            plt.axhline(y=calculated_threshold, color='r', linestyle='--', label=f'Threshold')
+            ax[1].axhline(y=calculated_threshold, color='r', linestyle='--', label='Threshold')
             rejected_frames = [f for f in raw_onset_frames if f not in onset_frames]
             if len(rejected_frames) > 0:
-                plt.vlines(times_in_envelope[rejected_frames], 0, np.max(onset_envelope), colors='orange', linestyles='dotted', linewidth=1, label='Rejected (Below Threshold)')
+                ax[1].vlines(times_in_envelope[rejected_frames], 0, np.max(onset_envelope), colors='orange', linestyles='dotted', linewidth=1, label='Rejected (Below Threshold)')
             ax[1].legend()
         plt.show()
 
 
     def compute_peak_onset(
-        self, preemphasis_coefficient=0.97, threshold=False, plot=False
+        self, preemphasis_coefficient=0.97, threshold=False, diff_envelope=False, plot=False
     ) -> list:
+        self.array = librosa.effects.preemphasis(
+            self.array, coef=preemphasis_coefficient
+        )
+        onset_envelope = librosa.onset.onset_strength(y=self.array, sr=self.sample_rate, aggregate=np.mean)
+
+        if threshold:
+            onset_frames, raw_onset_frames, calculated_threshold, onset_envelope = self._preprocess(
+                threshold=threshold, onset_envelope=onset_envelope, diff_envelope=diff_envelope
+            )
+            times_in_envelope = librosa.frames_to_time(np.arange(len(onset_envelope)), sr=self.sample_rate)
+            times = librosa.frames_to_time(onset_frames, sr=self.sample_rate)
+        else:
+            onset_frames = librosa.onset.onset_detect(
+                onset_envelope=onset_envelope, sr=self.sample_rate
+            )
+            times_in_envelope = librosa.times_like(onset_envelope, sr=self.sample_rate)
+            times = times_in_envelope[onset_frames]
+
+        if plot:
+            self._plot(times_in_envelope, times, onset_envelope, raw_onset_frames, onset_frames, threshold, calculated_threshold)
+
+        return times
+
+    def compute_backtrack_onset(self, preemphasis_coefficient=0.97, threshold=False, plot=False) -> list:
         self.array = librosa.effects.preemphasis(
             self.array, coef=preemphasis_coefficient
         )
@@ -120,55 +156,21 @@ class OnsetDetect:
             onset_frames, raw_onset_frames, calculated_threshold = self._preprocess(
                 threshold=threshold, onset_envelope=onset_envelope
             )
-            #times = librosa.frames_to_time(onset_frames, sr=self.sample_rate)
+            backtracked_onset_frames = librosa.onset.onset_backtrack(onset_frames, onset_envelope)
+            backtracked_raw_onset_frames = librosa.onset.onset_backtrack(raw_onset_frames, onset_envelope)
             times_in_envelope = librosa.frames_to_time(np.arange(len(onset_envelope)), sr=self.sample_rate)
-            times = librosa.frames_to_time(onset_frames, sr=self.sample_rate)
+            times = librosa.frames_to_time(backtracked_onset_frames, sr=self.sample_rate)
         else:
             onset_frames = librosa.onset.onset_detect(
                 onset_envelope=onset_envelope, sr=self.sample_rate
             )
             times_in_envelope = librosa.times_like(onset_envelope, sr=self.sample_rate)
             times = times_in_envelope[onset_frames]
-        #print(times, len(onset_envelope[onset_frames]), len(times))
-
+        
         if plot:
-            self._plot(times_in_envelope, times, onset_envelope, raw_onset_frames, onset_frames, threshold, calculated_threshold)
+            self._plot(times_in_envelope, times, onset_envelope, backtracked_raw_onset_frames, backtracked_onset_frames, threshold, calculated_threshold)
+
         return times
-
-    def compute_backtrack_onset(self, preemphasis_coefficient=0.97, threshold=False, plot=False) -> list:
-        onset_envelope = librosa.onset.onset_strength(y=self.array, sr=self.sample_rate)
-        onset_raw = librosa.onset.onset_detect(
-            onset_envelope=onset_envelope, backtrack=False
-        )
-        onset_backtrack = librosa.onset.onset_backtrack(onset_raw, onset_envelope)
-        print(onset_backtrack.tolist())
-
-        if plot:
-            S = np.abs(librosa.stft(y=self.array))
-            rms = librosa.feature.rms(S=S)
-            times = librosa.times_like(onset_envelope, sr=self.sample_rate)
-            onset_backtrack_rms = librosa.onset.onset_backtrack(onset_raw, rms[0])
-
-            fig, ax = plt.subplots(nrows=2, sharex=True)
-            librosa.display.specshow(
-                librosa.amplitude_to_db(S, ref=np.max),
-                x_axis="time",
-                y_axis="log",
-                ax=ax[0],
-            )
-            ax[0].set(title=f"Backtrack onset: {self.sound_file}")
-            ax[0].label_outer()
-            ax[1].plot(times, rms[0], label="RMS")
-            # ax[0].vlines(librosa.frames_to_time(onset_backtrack_rms), 0, rms.max(), label='Backtracked RMS', color='g', linestyle='--')
-            ax[0].vlines(
-                librosa.frames_to_time(onset_backtrack_rms),
-                0,
-                8192,
-                label="Backtracked RMS",
-                color="g",
-                linestyle="--",
-            )
-            plt.show()
 
     # TODO: Onset detection, backtrack
     # TODO: Score file integration
@@ -179,7 +181,8 @@ class OnsetDetect:
 
 
 if __name__ == "__main__":
-    #print(OnsetDetect('data/rytel-A1.wav').compute_backtrack_onset(plot=True))
-    onset = (OnsetDetect("data/rytel-A1.wav").compute_peak_onset(preemphasis_coefficient=0.97, threshold=1.2, plot=True))
-    for i in onset:
-        print(f"{i},peak_preprocessed")
+    print(OnsetDetect('data/rytel-A1.wav').compute_peak_onset(threshold=3, diff_envelope=True, plot=True))
+    #print(OnsetDetect('data/rytel-A1.wav').compute_backtrack_onset(threshold=3,plot=True))
+    #onset = (OnsetDetect("data/rytel-A1.wav").compute_backtrack_onset(preemphasis_coefficient=0.97, threshold=1, plot=True))
+    #for i in onset:
+    #    print(f"{i},backtrack_preprocessed")
