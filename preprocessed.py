@@ -44,25 +44,53 @@ class OnsetDetect:
     def array(self):
         return self._array
 
+    @array.setter
+    def array(self, value):
+        self._array = value
+
     @property
     def sample_rate(self):
         return self._sample_rate
 
-    def compute_peak_onset(self, plot=False) -> list:
-        onset_array = librosa.onset.onset_detect(
-            y=self.array, sr=self.sample_rate, units="time"
+    def _preprocess(self, threshold, onset_envelope):
+        median_floor = np.median(onset_envelope)
+        calculated_threshold = threshold * median_floor
+        masked_envelope = np.where(
+            onset_envelope > calculated_threshold, onset_envelope, 0
         )
-        print(onset_array.tolist())
+        onset_frames = librosa.util.peak_pick(
+            masked_envelope,
+            pre_avg=3,
+            post_avg=3,
+            pre_max=3,
+            post_max=3,
+            wait=3,
+            delta=0.2,
+        )
+        return onset_frames, masked_envelope[masked_envelope != 0]
 
-        if plot:
-            onset_envelope = librosa.onset.onset_strength(
-                y=self.array, sr=self.sample_rate
+    def compute_peak_onset(
+        self, preemphasis_coefficient=0.97, threshold=False, plot=False
+    ) -> list:
+        self.array = librosa.effects.preemphasis(
+            self.array, coef=preemphasis_coefficient
+        )
+        onset_envelope = librosa.onset.onset_strength(y=self.array, sr=self.sample_rate)
+
+        if threshold:
+            onset_frames, onset_envelope = self._preprocess(
+                threshold=threshold, onset_envelope=onset_envelope
             )
-            times = librosa.times_like(onset_envelope, sr=self.sample_rate)
+            times = librosa.frames_to_time(onset_frames, sr=self.sample_rate)
+        else:
             onset_frames = librosa.onset.onset_detect(
                 onset_envelope=onset_envelope, sr=self.sample_rate
             )
+            times = librosa.times_like(onset_envelope, sr=self.sample_rate)
+            times = times[onset_frames]
+        print(len(times), len(onset_envelope), len(onset_frames))
 
+        if plot:
             D = np.abs(librosa.stft(self.array))
             fig, ax = plt.subplots(nrows=2, sharex=True)
             librosa.display.specshow(
@@ -74,10 +102,10 @@ class OnsetDetect:
             )
             ax[0].set(title=f"Power spectrogram: {self.sound_file}")
             ax[0].label_outer()
-            ax[1].plot(times, onset_envelope, label="Onset strength")
-            # ax[0].vlines(times[onset_frames], 0, onset_envelope.max(), color='r', alpha=0.9, linestyle='--', label='Onsets')
+            #ax[1].plot(times, onset_envelope, label="Onset strength")
             ax[0].vlines(
-                times[onset_frames],
+                #times[onset_frames],
+                times,
                 0,
                 8192,
                 color="r",
@@ -87,6 +115,7 @@ class OnsetDetect:
             )
             # ax[1].legend()
             plt.show()
+        return times
 
     def compute_backtrack_onset(self, plot=False) -> list:
         onset_envelope = librosa.onset.onset_strength(y=self.array, sr=self.sample_rate)
@@ -123,84 +152,6 @@ class OnsetDetect:
             )
             plt.show()
 
-    def test_method(self):
-        onset_envelope = librosa.onset.onset_strength(y=self.array, sr=self.sample_rate)
-        onset_raw = librosa.onset.onset_detect(
-            onset_envelope=onset_envelope, backtrack=False
-        )
-        peaks = librosa.util.peak_pick(
-            onset_envelope,
-            pre_max=3,
-            post_max=3,
-            pre_avg=3,
-            post_avg=5,
-            delta=0.5,
-            wait=10,
-        )
-        onset_backtrack = librosa.onset.onset_backtrack(onset_raw, onset_envelope)
-
-        times = librosa.times_like(onset_envelope, sr=self.sample_rate)
-        onset_frames = librosa.onset.onset_detect(
-            onset_envelope=onset_envelope, sr=self.sample_rate
-        )
-        S = np.abs(librosa.stft(y=self.array))
-        rms = librosa.feature.rms(S=S)
-
-        onset_backtrack_rms = librosa.onset.onset_backtrack(onset_raw, rms[0])
-        onset_backtrack_str = librosa.onset.onset_backtrack(onset_raw, onset_envelope)
-
-        fig, ax = plt.subplots(nrows=1, sharex=True)
-
-        librosa.display.specshow(
-            librosa.amplitude_to_db(S, ref=np.max),
-            x_axis="time",
-            y_axis="log",
-            ax=ax,
-            sr=self.sample_rate,
-        )
-        # librosa.display.specshow(librosa.amplitude_to_db(S, ref=np.max), x_axis='time', y_axis='log', ax=ax[0], sr=self.sample_rate)
-        #
-        # ax[0].plot(times, rms[0], label='RMS')
-        # ax[2].plot(times, onset_envelope, label='Onset strength')
-
-        # ax[0].vlines(times[onset_frames], 0, rms.max(), color='r', alpha=0.9, linestyle='--', label='Onsets')
-        # ax[2].vlines(times[onset_frames], 0, onset_envelope.max(), color='r', alpha=0.9, linestyle='--', label='Onsets')
-
-        # ax[0].vlines(librosa.frames_to_time(onset_backtrack_rms), 0, 8192, label='Backtracked RMS', color='g', linestyle='--')
-        # ax.vlines(
-        #    librosa.frames_to_time(onset_backtrack_str),
-        #    0,
-        #    8192,
-        #    label="Backtracked RMS",
-        #    color="g",
-        #    linestyle="--",
-        # )
-        ax.vlines(times[peaks], 0, 8192, color="r", alpha=0.8, label="Selected peaks")
-
-        plt.show()
-
-    def mel_spectrogram(self):
-        S = librosa.feature.melspectrogram(
-            y=self.array, sr=self.sample_rate, n_mels=128, fmax=8000
-        )
-        fig, ax = plt.subplots(nrows=2, sharex=True)
-        S_dB = librosa.power_to_db(S, ref=np.max)
-        img = librosa.display.specshow(
-            S_dB, x_axis="time", y_axis="mel", sr=self.sample_rate, fmax=8000, ax=ax[0]
-        )
-        fig.colorbar(img, ax=ax[0], format="%+2.0f dB")
-        ax[0].set(title="Mel-frequency spectrogram")
-
-        D = np.abs(librosa.stft(y=self.array))
-        librosa.display.specshow(
-            librosa.amplitude_to_db(D, ref=np.max),
-            x_axis="time",
-            y_axis="log",
-            ax=ax[1],
-            sr=self.sample_rate,
-        )
-        plt.show()
-
     # TODO: Onset detection, backtrack
     # TODO: Score file integration
     # TODO: Export options
@@ -210,6 +161,5 @@ class OnsetDetect:
 
 
 if __name__ == "__main__":
-    # print(OnsetDetect('data/rytel-A1.wav').compute_backtrack_onset(plot=True))
-    print(OnsetDetect("data/rytel-A1.wav").compute_peak_onset(plot=True))
-    # print(OnsetDetect("data/rytel-A1.wav").mel_spectrogram())
+    #print(OnsetDetect('data/rytel-A1.wav').compute_backtrack_onset(plot=True))
+    print(OnsetDetect("data/rytel-A1.wav").compute_peak_onset(threshold=False, plot=True))
