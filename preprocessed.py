@@ -74,6 +74,40 @@ class OnsetDetect:
 
         return picked_peaks, onset_frames, calculated_threshold
 
+    def _plot(self, times_in_envelope, times, onset_envelope, raw_onset_frames, onset_frames, threshold, calculated_threshold):
+        D = np.abs(librosa.stft(self.array))
+        fig, ax = plt.subplots(nrows=2, sharex=True)
+        librosa.display.specshow(
+            librosa.amplitude_to_db(D, ref=np.max),
+            x_axis="time",
+            y_axis="log",
+            ax=ax[0],
+            sr=self.sample_rate,
+        )
+
+        ax[0].set(title=f"Power spectrogram: {self.sound_file}")
+        ax[0].label_outer()
+        ax[0].vlines(
+            times,
+            0,
+            16384,
+            color="g",
+            alpha=0.9,
+            linestyles="solid",
+            label="Onsets",
+        )
+
+        ax[1].plot(times_in_envelope, onset_envelope, label='Raw Onset Envelope', alpha=0.6)
+        plt.vlines(times, 0, np.max(onset_envelope), colors='green', linestyles='solid', linewidth=2, label='Valid Onsets')
+        if threshold:
+            plt.axhline(y=calculated_threshold, color='r', linestyle='--', label=f'Threshold')
+            rejected_frames = [f for f in raw_onset_frames if f not in onset_frames]
+            if len(rejected_frames) > 0:
+                plt.vlines(times_in_envelope[rejected_frames], 0, np.max(onset_envelope), colors='orange', linestyles='dotted', linewidth=1, label='Rejected (Below Threshold)')
+            ax[1].legend()
+        plt.show()
+
+
     def compute_peak_onset(
         self, preemphasis_coefficient=0.97, threshold=False, plot=False
     ) -> list:
@@ -93,43 +127,15 @@ class OnsetDetect:
             onset_frames = librosa.onset.onset_detect(
                 onset_envelope=onset_envelope, sr=self.sample_rate
             )
-            times = librosa.times_like(onset_envelope, sr=self.sample_rate)
-            times = times[onset_frames]
+            times_in_envelope = librosa.times_like(onset_envelope, sr=self.sample_rate)
+            times = times_in_envelope[onset_frames]
         #print(times, len(onset_envelope[onset_frames]), len(times))
 
         if plot:
-            D = np.abs(librosa.stft(self.array))
-            fig, ax = plt.subplots(nrows=2, sharex=True)
-            librosa.display.specshow(
-                librosa.amplitude_to_db(D, ref=np.max),
-                x_axis="time",
-                y_axis="log",
-                ax=ax[0],
-                sr=self.sample_rate,
-            )
-            ax[0].set(title=f"Power spectrogram: {self.sound_file}")
-            ax[0].label_outer()
-            ax[0].vlines(
-                times,
-                0,
-                16384,
-                color="g",
-                alpha=0.9,
-                linestyles="solid",
-                label="Onsets",
-            )
-            ax[1].plot(times_in_envelope, onset_envelope, label='Raw Onset Envelope', alpha=0.6)
-            plt.axhline(y=calculated_threshold, color='r', linestyle='--', label=f'Threshold')
-            plt.vlines(times, 0, np.max(onset_envelope), colors='green', linestyles='solid', linewidth=2, label='Valid Onsets')
-            rejected_frames = [f for f in raw_onset_frames if f not in onset_frames]
-            if len(rejected_frames) > 0:
-                plt.vlines(times_in_envelope[rejected_frames], 0, np.max(onset_envelope), colors='orange', linestyles='dotted', linewidth=1, label='Rejected (Below Threshold)')
-            ax[1].legend()
-            # ax[1].legend()
-            plt.show()
+            self._plot(times_in_envelope, times, onset_envelope, raw_onset_frames, onset_frames, threshold, calculated_threshold)
         return times
 
-    def compute_backtrack_onset(self, plot=False) -> list:
+    def compute_backtrack_onset(self, preemphasis_coefficient=0.97, threshold=False, plot=False) -> list:
         onset_envelope = librosa.onset.onset_strength(y=self.array, sr=self.sample_rate)
         onset_raw = librosa.onset.onset_detect(
             onset_envelope=onset_envelope, backtrack=False
