@@ -3,6 +3,7 @@ import librosa
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.signal import medfilt
+from scipy.stats import median_abs_deviation
 
 
 class OnsetDetect:
@@ -125,71 +126,30 @@ class OnsetDetect:
             ax[1].legend()
         plt.show()
 
+    def adaptive_detection(self, k=2.0, frame_length=2048):
+        # Compute two envelopes: spectral flux and root-mean-square derivative.
+        spectral_flux_envelope = librosa.onset.onset_strength(y=self.array, sr=self.sample_rate)
+        rms = librosa.feature.rms(y=self.array, frame_length=frame_length, hop_length=512)[0]
+        rms_diff = np.diff(rms)
+        rms_diff_rising = np.maximum(0, rms_diff)
+        rms_diff_envelope = np.concatenate([[0], rms_diff_rising])
 
-    def compute_peak_onset(
-        self, preemphasis_coefficient=0.97, threshold=False, diff_envelope=False, plot=False
-    ) -> list:
-        self.array = librosa.effects.preemphasis(
-            self.array, coef=preemphasis_coefficient
-        )
-        onset_envelope = librosa.onset.onset_strength(y=self.array, sr=self.sample_rate, aggregate=np.mean)
+        # Normalise both envelopes with epsilon smoothing to avoid div by 0.
+        spectral_flux_envelope = spectral_flux_envelope / (np.max(spectral_flux_envelope) + 1e-6)
+        rms_diff_envelope = rms_diff_envelope / (np.max(rms_diff_envelope) + 1e-6)
 
-        if diff_envelope:
-            onset_frames, raw_onset_frames, calculated_threshold, onset_envelope = self._diff_preprocess()
-        elif threshold:
-            onset_frames, raw_onset_frames, calculated_threshold = self._preprocess(
-                threshold=threshold, onset_envelope=onset_envelope, diff_envelope=diff_envelope
-            )
-            times_in_envelope = librosa.frames_to_time(np.arange(len(onset_envelope)), sr=self.sample_rate)
-            times = librosa.frames_to_time(onset_frames, sr=self.sample_rate)
-        else:
-            onset_frames = librosa.onset.onset_detect(
-                onset_envelope=onset_envelope, sr=self.sample_rate
-            )
-            times_in_envelope = librosa.times_like(onset_envelope, sr=self.sample_rate)
-            times = times_in_envelope[onset_frames]
-
-        if plot:
-            self._plot(times_in_envelope, times, onset_envelope, raw_onset_frames, onset_frames, threshold, calculated_threshold)
-
-        return times
-
-    def compute_backtrack_onset(self, preemphasis_coefficient=0.97, threshold=False, plot=False) -> list:
-        self.array = librosa.effects.preemphasis(
-            self.array, coef=preemphasis_coefficient
-        )
-        onset_envelope = librosa.onset.onset_strength(y=self.array, sr=self.sample_rate)
-
-        if threshold:
-            onset_frames, raw_onset_frames, calculated_threshold = self._preprocess(
-                threshold=threshold, onset_envelope=onset_envelope
-            )
-            backtracked_onset_frames = librosa.onset.onset_backtrack(onset_frames, onset_envelope)
-            backtracked_raw_onset_frames = librosa.onset.onset_backtrack(raw_onset_frames, onset_envelope)
-            times_in_envelope = librosa.frames_to_time(np.arange(len(onset_envelope)), sr=self.sample_rate)
-            times = librosa.frames_to_time(backtracked_onset_frames, sr=self.sample_rate)
-        else:
-            onset_frames = librosa.onset.onset_detect(
-                onset_envelope=onset_envelope, sr=self.sample_rate
-            )
-            times_in_envelope = librosa.times_like(onset_envelope, sr=self.sample_rate)
-            times = times_in_envelope[onset_frames]
+        # Add complimentary envelopes
+        hybrid_envelope = spectral_flux_envelope + rms_diff_envelope
         
-        if plot:
-            self._plot(times_in_envelope, times, onset_envelope, backtracked_raw_onset_frames, backtracked_onset_frames, threshold, calculated_threshold)
+        # Smooth envelope
+        smoothed_hybrid_envelope = medfilt(hybrid_envelope, kernel_size=6)
 
-        return times
-
-    # TODO: Onset detection, backtrack
-    # TODO: Score file integration
-    # TODO: Export options
-    # TODO: Consolidate plotting into a single method.
-    # TODO: Is maybe backtrack based on spectral flux more appropriate here than RMS?
-    # Another idea. Maybe I should run it through the mel filter bank first. Allegedly that shoud bias the frequency bands biased by the human ear.
-
-if __name__ == "__main__":
-    print(OnsetDetect('data/rytel-A1.wav').compute_peak_onset(threshold=3, diff_envelope=True, plot=True))
-    #print(OnsetDetect('data/rytel-A1.wav').compute_backtrack_onset(threshold=3,plot=True))
-    #onset = (OnsetDetect("data/rytel-A1.wav").compute_backtrack_onset(preemphasis_coefficient=0.97, threshold=1, plot=True))
-    #for i in onset:
-    #    print(f"{i},backtrack_preprocessed")
+        # Compute an adaptive threshold
+        median = np.median(smoothed_hybrid_envelope)
+        mad = median_abs_deviation(smoothed_hybrid_envelope)
+        k_factor = k
+        threshold = median + (k_factor * mad)
+        threshold = max(threshold, 0)
+        
+        #TODO: Finish adaptive detection
+        #TODO: Experiment with the difference between rms derivative and rms delta.
