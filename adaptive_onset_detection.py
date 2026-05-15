@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.signal import medfilt
 from scipy.stats import median_abs_deviation
-
+from scipy.ndimage import generic_filter, median_filter
 
 class OnsetDetect:
     """Takes a sound file and optionally a score file. Has methods to detect onsets and can output as list, or as csv with pitch name and note value."""
@@ -77,20 +77,6 @@ class OnsetDetect:
 
         return picked_peaks, onset_frames, calculated_threshold
 
-    def _diff_preprocess(self, threshold, onset_envelope):
-        diff_onset_envelope = np.diff(onset_envelope)
-        diff_onset_envelope = np.maximum(0, diff_onset_envelope)
-        diff_onset_envelope = np.concatenate([[0], diff_onset_envelope])
-        smooth_diff_onset_env = medfilt(diff_onset_envelope, kernel_size=3)
-
-        threshold_value = np.percentile(smooth_diff_onset_env, 75)
-        onset_frames_above_threshold = np.where(smooth_diff_onset_env > threshold_value)[0]
-
-        onset_frames = []
-        if len(onset_frames_above_threshold) > 0:
-            #TODO add remaining logic here. I think this is the right way to go.
-
-            return smooth_diff_onset_env
 
     def _plot(self, times_in_envelope, times, onset_envelope, raw_onset_frames, onset_frames, threshold, calculated_threshold):
         D = np.abs(librosa.stft(self.array))
@@ -126,30 +112,117 @@ class OnsetDetect:
             ax[1].legend()
         plt.show()
 
-    def adaptive_detection(self, k=2.0, frame_length=2048):
+    # ENVELOPES
+
+    def _envelope_spectral_flux(self, frame_length=2048):
         # Compute two envelopes: spectral flux and root-mean-square derivative.
         spectral_flux_envelope = librosa.onset.onset_strength(y=self.array, sr=self.sample_rate)
+        spectral_flux_envelope = spectral_flux_envelope / (np.max(spectral_flux_envelope) + 1e-6)
+        return spectral_flux_envelope
+
+    def _envelope_diff_spectral_flux(self):
+        spectral_flux_envelope = librosa.onset.onset_strength(y=self.array, sr=self.sample_rate)
+        diff_specflux_envelope = np.diff(spectral_flux_envelope)
+        diff_specflux_envelope = np.maximum(0, diff_specflux_envelope)
+        diff_specflux_envelope = np.concatenate([[0], diff_specflux_envelope])
+        diff_specflux_envelope = diff_specflux_envelope / (np.max(diff_specflux_envelope) + 1e-6)
+        return diff_specflux_envelope
+
+    def _envelope_differential_rms(self, frame_length=2048):
         rms = librosa.feature.rms(y=self.array, frame_length=frame_length, hop_length=512)[0]
         rms_diff = np.diff(rms)
         rms_diff_rising = np.maximum(0, rms_diff)
         rms_diff_envelope = np.concatenate([[0], rms_diff_rising])
-
-        # Normalise both envelopes with epsilon smoothing to avoid div by 0.
-        spectral_flux_envelope = spectral_flux_envelope / (np.max(spectral_flux_envelope) + 1e-6)
         rms_diff_envelope = rms_diff_envelope / (np.max(rms_diff_envelope) + 1e-6)
+        return rms_diff_envelope
 
-        # Add complimentary envelopes
-        hybrid_envelope = spectral_flux_envelope + rms_diff_envelope
-        
-        # Smooth envelope
-        smoothed_hybrid_envelope = medfilt(hybrid_envelope, kernel_size=6)
+    def _envelope_delta_rms(self, frame_length=2048):
+        rms = librosa.feature.rms(y=self.array, frame_length=frame_length, hop_length=512)[0]
+        delta_window = 4
+        smoothed_rms = np.convolve(rms, np.ones(delta_window)/delta_window, mode='same')
+        rms_delta_envelope = rms - smoothed_rms
+        rms_delta_envelope = np.maximum(0, rms_delta_envelope)
+        rms_delta_envelope = rms_delta_envelope / (np.max(rms_delta_envelope) + 1e-6)
+        return rms_delta_envelope
 
+    def _envelope_chroma_cqt(self):
+        chroma_cqt = librosa.feature.chroma_cqt(y=self.array, sr=self.sample_rate, hop_length=512)
+        chroma_cqt_diff = np.diff(chroma_cqt)
+        chroma_cqt_diff = np.maximum(0, chroma_cqt_diff).mean(axis=0)
+        chroma_envelope = np.concatenate([[0], chroma_cqt_diff])
+        chroma_envelope = chroma_envelope / (np.max(chroma_envelope) + 1e-6)
+        return chroma_envelope * 0.5 # Multiplied by 0.5 to weight it lower in hybrid envelopes, as it is quite jittery. If used on its own, the multiplication is in consequential.
+
+    def _create_hybrid_envelope(self, *envelopes):
+        hybrid_envelope = [0]
+        for i in envelopes:
+            hybrid_envelope += i
+        return hybrid_envelope
+
+    # THRESHOLD
+
+    def _global_mad_threshold(self, onset_envelope, k_factor=2.0):
         # Compute an adaptive threshold
-        median = np.median(smoothed_hybrid_envelope)
-        mad = median_abs_deviation(smoothed_hybrid_envelope)
-        k_factor = k
-        threshold = median + (k_factor * mad)
+        median = np.median(onset_envelope)
+        mad = median_abs_deviation(onset_envelope)
+        k = k_factor
+        threshold = median + (k * mad)
         threshold = max(threshold, 0)
+        return threshold
+
+    def _moving_mad_threshold(self, onset_envelope, window_duration=2.0, k_factor=2.0):
+        window = int(window_duration * self.sample_rate/512)
+        window_median = median_filter(onset_envelope, size=window, mode='nearest')
+        window_mad = generic_filter(onset_envelope, median_abs_deviation, size=window, mode='nearest')
+        threshold = window_median + (window_mad * k_factor)
+        return threshold
+
+    def _pick_and_merge(self, onset_envelope, threshold):
+        onset_envelope = medfilt(onset_envelope, kernel_size=7)
+        indices_above_threshold = np.where(onset_envelope > threshold)[0]
+
+        # Peak Picking
+        detected_onset_frames = []
+        try:
+            current_event = indices_above_threshold[0]
+            for i in range(1, len(indices_above_threshold)):
+                idx = indices_above_threshold[i]
+                previous_idx = indices_above_threshold[i-1]
+                if idx - previous_idx <= 1:
+                    current_event.append(idx)
+                else:
+                    loudest_frame = max(current_event, key=lambda f: onset_envelope[f])
+                    detected_onset_frames.append(loudest_frame)
+                    current_event = idx
+                loudest_frame = max(current_event, key=lambda f: onset_envelope[f])
+                detected_onset_frames.append(loudest_frame)
+            detected_onset_times = librosa.frames_to_time(np.array(detected_onset_frames), sr=self.sample_rate)
+        except Exception as e:
+           raise e 
+
+        # Merge near-simultaneous detections
+        minimum_note_gap = 0.08 # in miliseconds
+        final_onset_timestamps = []
+        try:
+            detected_onset_times = np.sort(detected_onset_times)
+            current_onset_cluster = [detected_onset_times[0]]
+
+            for i in range(1, len(detected_onset_times)):
+                timestamp = detected_onset_times[i]
+                previous_timestamp = detected_onset_times[i-1]
+
+                if timestamp - previous_timestamp < minimum_note_gap:
+                    current_onset_cluster.append(timestamp)
+                else:
+                    centroid_onset = np.mean(current_onset_cluster)
+                    final_onset_timestamps.append(centroid_onset)
+                    current_onset_cluster = timestamp
+            final_onset_timestamps.append(np.mean(current_onset_cluster))
+            return final_onset_timestamps
+        except Exception as e:
+            raise e
+
+
         
         #TODO: Finish adaptive detection
         #TODO: Experiment with the difference between rms derivative and rms delta.
