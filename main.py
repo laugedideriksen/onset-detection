@@ -154,7 +154,7 @@ class OnsetDetect:
 
     # ONSET DETECTION
 
-    def _peak_pick(self, onset_envelope, threshold):
+    def _centroid_peak_pick(self, onset_envelope, threshold):
         indices_above_threshold = np.where(onset_envelope > threshold)[0]
         detected_onset_frames = []
         if len(indices_above_threshold) > 0:
@@ -170,6 +170,28 @@ class OnsetDetect:
                     current_event = [idx]
         loudest_frame = max(current_event, key=lambda f: onset_envelope[f])
         detected_onset_frames.append(loudest_frame)
+        detected_onset_times = librosa.frames_to_time(
+            np.array(detected_onset_frames), sr=self._sample_rate
+        )
+        return detected_onset_times
+
+    def _backtrack_peak_pick(self, onset_envelope, threshold):
+        indices_above_threshold = np.where(onset_envelope > threshold)[0]
+        detected_onset_frames = []
+        if len(indices_above_threshold) > 0:
+            current_event = [indices_above_threshold[0]]
+            for i in range(1, len(indices_above_threshold)):
+                idx = indices_above_threshold[i]
+                previous_idx = indices_above_threshold[i - 1]
+                if idx - previous_idx <= 1:
+                    current_event.append(idx)
+                else:
+                    first_frame = current_event[0]
+                    detected_onset_frames.append(first_frame)
+                    current_event = [idx]
+        first_frame = current_event[0]
+        detected_onset_frames.append(first_frame)
+        print(detected_onset_frames)
         detected_onset_times = librosa.frames_to_time(
             np.array(detected_onset_frames), sr=self._sample_rate
         )
@@ -337,7 +359,7 @@ class OnsetDetect:
         filter_kernel:int=3,
         threshold_k:float=2.0,
         threshold_type:str="global",
-        peak_picking:str="picky",
+        peak_picking:str="backtrack",
         merge_onsets:bool=False,
         output:str="list",
         output_destination:str|bool=False,
@@ -377,8 +399,12 @@ class OnsetDetect:
         else:
             raise ValueError(f"{threshold_type} is not a supported threshold type.")
 
-        if peak_picking == "picky":
-            onset_timestamps = self._peak_pick(
+        if peak_picking == "centroid":
+            onset_timestamps = self._centroid_peak_pick(
+                onset_envelope=onset_envelope, threshold=threshold
+            )
+        elif peak_picking == 'backtrack':
+            onset_timestamps = self._backtrack_peak_pick(
                 onset_envelope=onset_envelope, threshold=threshold
             )
         elif peak_picking == "librosa":
@@ -435,14 +461,14 @@ class OnsetDetect:
 if __name__ == "__main__":
     # TODO: set default behaviour
     fp = "data/trepak.mp3"
-    OnsetDetect(fp, start=4.6, end=14.6).compare(compare_parameter="envelopes")
-    OnsetDetect(fp, start=4.6, end=14.6).compare(compare_parameter="filtering")
+    #OnsetDetect(fp, start=4.6, end=14.6).compare(compare_parameter="envelopes")
+    #OnsetDetect(fp, start=4.6, end=14.6).compare(compare_parameter="filtering")
     OnsetDetect(fp, start=4.6, end=14.6).detect_onsets(
         envelope="hybrid",
         hybrid_env_components=["spectral_flux", "delta_rms", "chroma_cqt"],
         output="rows",
         threshold_k=1.5,
         threshold_type="moving",
-        peak_picking="picky",
+        peak_picking="backtrack",
         merge_onsets=False,
     )
