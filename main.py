@@ -7,14 +7,18 @@ from scipy.stats import median_abs_deviation
 from scipy.ndimage import generic_filter, median_filter
 import matplotlib.pyplot as plt
 
+
 class OnsetDetect:
-    def __init__(self, sound_file: str, title="", start:float=0, end:float|None=None) -> None:
+    def __init__(
+        self, sound_file: str, title="", start: float = 0, end: float | None = None
+    ) -> None:
         self.sound_file = sound_file
         self.start = start
         self.end = end
         duration = (self.end - self.start) if self.end else None
         self._array, self._sample_rate = librosa.load(
-                sound_file, offset=self.start, duration=duration)
+            sound_file, offset=self.start, duration=duration
+        )
         self.title = title
 
     @property
@@ -247,17 +251,19 @@ class OnsetDetect:
                 print(f"{ts},{idx}")
         elif output_type == "csv":
             if output_destination:
-                output_destination = f'{output_destination}.csv'
+                output_destination = f"{output_destination}.csv"
             else:
-                output_destination = 'onset_timestamps.csv'
-            with open(output_destination, 'w', newline='') as csvfile:
-                csvwriter = csv.writer(csvfile, delimiter=' ')
+                output_destination = "onset_timestamps.csv"
+            with open(output_destination, "w", newline="") as csvfile:
+                csvwriter = csv.writer(csvfile, delimiter=" ")
                 for idx, ts in enumerate(onset_timestamps):
                     csvwriter.writerow([ts, idx])
 
     # VISUALISATION
 
-    def _plot(self, onset_timestamps, onset_envelope, threshold, threshold_type, peak_picking):
+    def _plot(
+        self, onset_timestamps, onset_envelope, threshold, threshold_type, peak_picking
+    ):
         times = librosa.frames_to_time(
             np.arange(len(onset_envelope)), sr=self._sample_rate
         )
@@ -299,7 +305,7 @@ class OnsetDetect:
             label="Detected onsets",
         )
 
-        if peak_picking != 'librosa':
+        if peak_picking != "librosa":
             if threshold_type == "global":
                 ax[1].axhline(y=threshold, color="r", label="Threshold")
             elif threshold_type == "moving":
@@ -353,18 +359,18 @@ class OnsetDetect:
 
     def detect_onsets(
         self,
-        envelope:str="spectral_flux",
-        hybrid_env_components:list=["spectral_flux", "delta_rms"],
-        filtering:str="median_filter",
-        filter_kernel:int=3,
-        threshold_k:float=2.0,
-        threshold_type:str="global",
-        peak_picking:str="backtrack",
-        merge_onsets:bool=False,
-        output:str="list",
-        output_destination:str|bool=False,
-        plot:bool=True,
-    )->None:
+        envelope: str = "spectral_flux",
+        hybrid_env_components: list = ["spectral_flux", "delta_rms"],
+        filtering: str = "median_filter",
+        filter_kernel: int = 3,
+        threshold_k: float = 2.0,
+        threshold_type: str = "global",
+        peak_picking: str = "backtrack",
+        merge_onsets: bool = False,
+        output: str = "list",
+        output_destination: str | bool = False,
+        plot: bool = True,
+    ) -> None:
         # TODO: implement detection logic
         if envelope == "spectral_flux":
             onset_envelope = self._envelope_spectral_flux()
@@ -403,7 +409,7 @@ class OnsetDetect:
             onset_timestamps = self._centroid_peak_pick(
                 onset_envelope=onset_envelope, threshold=threshold
             )
-        elif peak_picking == 'backtrack':
+        elif peak_picking == "backtrack":
             onset_timestamps = self._backtrack_peak_pick(
                 onset_envelope=onset_envelope, threshold=threshold
             )
@@ -429,10 +435,10 @@ class OnsetDetect:
                 onset_envelope=onset_envelope,
                 threshold=threshold,
                 threshold_type=threshold_type,
-                peak_picking=peak_picking
+                peak_picking=peak_picking,
             )
 
-    def compare(self, compare_parameter:str="envelopes")->None:
+    def compare(self, compare_parameter: str = "envelopes") -> None:
         # TODO: implement plotting
         # TODO: potential support for ground truth and statistical comparison to that?
         specflux = self._envelope_spectral_flux()
@@ -460,14 +466,14 @@ class OnsetDetect:
 
 if __name__ == "__main__":
     # TODO: set default behaviour
-    fp = "data/trepak.mp3"
-    #OnsetDetect(fp, start=4.6, end=14.6).compare(compare_parameter="envelopes")
-    #OnsetDetect(fp, start=4.6, end=14.6).compare(compare_parameter="filtering")
-    OnsetDetect(fp, start=4.6, end=14.6).detect_onsets(
+    fp = "data/02-Orsa-storpolska.mp3"
+    OnsetDetect(fp, start=0, end=15).compare(compare_parameter="envelopes")
+    # OnsetDetect(fp, start=4.6, end=14.6).compare(compare_parameter="filtering")
+    OnsetDetect(fp, start=0, end=15).detect_onsets(
         envelope="hybrid",
-        hybrid_env_components=["spectral_flux", "delta_rms", "chroma_cqt"],
+        hybrid_env_components=["spectral_flux", "diff_rms"],
         output="rows",
-        threshold_k=1.5,
+        threshold_k=1.0,
         threshold_type="moving",
         peak_picking="backtrack",
         merge_onsets=False,
