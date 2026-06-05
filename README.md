@@ -1,9 +1,12 @@
 A moderately overengineered Python tool for onset detection and visualisation. Under the hood, it is a combination of [`librosa`](https://github.com/librosa/librosa) for the initial analysis, `scipy` for filtering, and `numpy` for additional processing and peak-picking. As with any onset detection, the output will almost certainly need manual adjustment. 
 
-Be advised that this project is still very much in development!
+Please note that this project is still very much in development!
 
-**Envelope comparison**
-![
+**Compare envelopes**
+![envelope-comparison](https://github.com/laugedideriksen/onset-detection-script/blob/main/assets/compare_envelopes.png)
+
+**Compare filtered/unfiltered envelopes**
+![compare-filtering](https://github.com/laugedideriksen/onset-detection-script/blob/main/assets/compare_filtering.png)
 
 ## Quick Start
 CLI:
