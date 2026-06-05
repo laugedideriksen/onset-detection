@@ -200,12 +200,12 @@ class OnsetDetect:
                 if idx - previous_idx <= 1:
                     current_event.append(idx)
                 else:
-                    j = current_event[0]
+                    j = max(current_event, key=lambda f: onset_envelope[f])
                     while (onset_envelope[j] - onset_envelope[j - 1]) > 0:
                         j -= 1
                     detected_onset_frames.append(j)
                     current_event = [idx]
-        j = current_event[0]
+        j = max(current_event, key=lambda f: onset_envelope[f])
         while (onset_envelope[j] - onset_envelope[j - 1]) > 0:
             j -= 1
         detected_onset_frames.append(j)
@@ -359,6 +359,7 @@ class OnsetDetect:
         ax[1].plot(
             times, moving_threshold, color="r", label="Moving threshold", linewidth=1
         )
+        ax[1].set_yticklabels([])
         plt.legend()
         plt.show()
 
@@ -381,7 +382,7 @@ class OnsetDetect:
             ax[1].plot(
                 times, self._median_filter(envelope[0], kernel_size=filter_kernel)
             )
-
+        ax[1].set_yticklabels([])
         plt.legend()
         plt.show()
         # TODO: mod 1 or remove y-axis labels in lower table.
@@ -395,7 +396,7 @@ class OnsetDetect:
         filtering: str = "median_filter",
         filter_kernel: int = 3,
         threshold_k: float = 0.9,
-        threshold_type: str = "global",
+        threshold_type: str = "moving",
         threshold_window: float = 1.0,
         peak_picking: str = "backtrack",
         merge_onsets: bool = False,

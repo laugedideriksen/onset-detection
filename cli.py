@@ -79,13 +79,19 @@ def main():
         epilog="""
             Examples:
                 # Basic usage with default settings
-                python cli.py path-to-audio-file
+                python cli.py detect-onsets path-to-audio-file
 
                 # Specify parameters and plot result
-                python cli.py path-to-audio-file --envelope hybrid --threshold-type moving --threshold-k 1.0 --plot
+                python cli.py detect-onsets path-to-audio-file --envelope hybrid --threshold-type moving --threshold-k 1.0 --plot
 
                 # Output result as csv
-                python cli.py path-to-audio-file --output csv --destination results.csv
+                python cli.py detect-onsets path-to-audio-file --output csv --destination results.csv
+
+                # Compare different envelope algorithms
+                python cli.py compare-envelopes path-to-audio-file
+
+                # Compare filtered and unfiltered envelopes
+                python cli.py compare-filtering path-to-audio-file
             """,
     )
 
@@ -165,20 +171,20 @@ def main():
     od_parser.add_argument(
         "--threshold-type",
         type=str,
-        default="global",
+        default="moving",
         choices=["global", "moving"],
         help="Threshold type (default: global).",
     )
     od_parser.add_argument(
         "--threshold-k",
         type=float,
-        default=2.0,
+        default=0.9,
         help="Sensitivity factor (k). Lower value = more sensitive onset detection (default: 0.9).",
     )
     od_parser.add_argument(
         "--threshold-window",
         type=float,
-        default=2.0,
+        default=1.0,
         help="Size of window for moving threshold in seconds (default: 1.0)",
     )
 
