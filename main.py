@@ -134,7 +134,7 @@ class OnsetDetect:
             elif i == "chroma_cqt":
                 envelope = np.array(self._envelope_chroma_cqt())
             hybrid_envelope.append(envelope)
-        hybrid_envelope = np.sum(np.vstack(hybrid_envelope), axis=0) 
+        hybrid_envelope = np.sum(np.vstack(hybrid_envelope), axis=0)
         hybrid_envelope = hybrid_envelope / (np.max(hybrid_envelope) + 1e-6)
         return hybrid_envelope
 
@@ -189,8 +189,7 @@ class OnsetDetect:
         return detected_onset_times
 
     def _backtrack_peak_pick(self, onset_envelope, threshold):
-        """Pick first frame of detected event."""
-        #TODO: Backtrack to local minimum in envelope, not in envelope over threshold!
+        """Peak pick using threshold, but backtrack to local minimum on entire envelope"""
         indices_above_threshold = np.where(onset_envelope > threshold)[0]
         detected_onset_frames = []
         if len(indices_above_threshold) > 0:
@@ -201,35 +200,13 @@ class OnsetDetect:
                 if idx - previous_idx <= 1:
                     current_event.append(idx)
                 else:
-                    first_frame = current_event[0]
-                    detected_onset_frames.append(first_frame)
-                    current_event = [idx]
-        first_frame = current_event[0]
-        detected_onset_frames.append(first_frame)
-        detected_onset_times = librosa.frames_to_time(
-            np.array(detected_onset_frames), sr=self._sample_rate
-        )
-        return detected_onset_times
-
-    def _backtrack_pp_beyond_threshold(self, onset_envelope, threshold):
-        """Peak pick using threshold, but backtrack to local minimum on entire envelope"""
-        indices_above_threshold = np.where(onset_envelope > threshold)[0]
-        detected_onset_frames = []
-        if len(indices_above_threshold) > 0:
-            current_event = [indices_above_threshold[0]]
-            for i in range(1, len(indices_above_threshold)):
-                idx = indices_above_threshold[i]
-                previous_idx = indices_above_threshold[i-1]
-                if idx - previous_idx <= 1:
-                    current_event.append(idx)
-                else:
                     j = current_event[0]
-                    while (onset_envelope[j] - onset_envelope[j-1]) > 0:
+                    while (onset_envelope[j] - onset_envelope[j - 1]) > 0:
                         j -= 1
                     detected_onset_frames.append(j)
                     current_event = [idx]
         j = current_event[0]
-        while (onset_envelope[j] - onset_envelope[j-1]) > 0:
+        while (onset_envelope[j] - onset_envelope[j - 1]) > 0:
             j -= 1
         detected_onset_frames.append(j)
         detected_onset_times = librosa.frames_to_time(
@@ -335,7 +312,7 @@ class OnsetDetect:
 
         # Graph onset envelope
         ax[1].plot(times, onset_envelope, label="Onset envelope")
-        #ax[1].plot(times, np.insert(np.diff(onset_envelope), 0, 0, axis=0), label='env_diff')
+        # ax[1].plot(times, np.insert(np.diff(onset_envelope), 0, 0, axis=0), label='env_diff')
 
         ax[1].vlines(
             onset_timestamps,
@@ -413,7 +390,7 @@ class OnsetDetect:
         output: str = "list",
         output_destination: str | bool = False,
         plot: bool = True,
-    ) -> str|None:
+    ) -> str | None:
         """Select envelope, adjust parameters, detect onsets, and plot results."""
         if envelope == "spectral_flux":
             onset_envelope = self._envelope_spectral_flux()
@@ -443,7 +420,9 @@ class OnsetDetect:
             )
         elif threshold_type == "moving":
             threshold = self._moving_mad_threshold(
-                onset_envelope=onset_envelope, k_factor=threshold_k, window_duration=threshold_window
+                onset_envelope=onset_envelope,
+                k_factor=threshold_k,
+                window_duration=threshold_window,
             )
         else:
             raise ValueError(f"{threshold_type} is not a supported threshold type.")
@@ -456,8 +435,6 @@ class OnsetDetect:
             onset_timestamps = self._backtrack_peak_pick(
                 onset_envelope=onset_envelope, threshold=threshold
             )
-        elif peak_picking == "backtrack_beyond_threshold":
-            onset_timestamps = self._backtrack_pp_beyond_threshold(onset_envelope=onset_envelope, threshold=threshold)
         elif peak_picking == "librosa":
             onset_timestamps, threshold = self._librosa_peak_pick(
                 onset_envelope=onset_envelope
@@ -512,19 +489,19 @@ class OnsetDetect:
 
 if __name__ == "__main__":
     # TODO: set default behaviour
-    #fp = "data/02-Orsa-storpolska.mp3"
-    fp = 'data/rytel-A1.wav'
-    #OnsetDetect(fp, start=0, end=15).compare(compare_parameter="envelopes")
-    #OnsetDetect(fp, start=4.6, end=14.6).compare(compare_parameter="filtering")
+    # fp = "data/02-Orsa-storpolska.mp3"
+    fp = "data/rytel-A1.wav"
+    # OnsetDetect(fp, start=0, end=15).compare(compare_parameter="envelopes")
+    # OnsetDetect(fp, start=4.6, end=14.6).compare(compare_parameter="filtering")
     OnsetDetect(fp, start=0, end=15).detect_onsets(
         envelope="hybrid",
         hybrid_env_components=["spectral_flux", "diff_rms", "chroma_cqt"],
         output="rows",
-        filtering='median_filter',
+        filtering="median_filter",
         filter_kernel=3,
         threshold_k=0.9,
         threshold_type="moving",
         threshold_window=1.0,
-        peak_picking="backtrack_beyond_threshold",
+        peak_picking="backtrack",
         merge_onsets=False,
     )
