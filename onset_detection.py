@@ -332,7 +332,9 @@ class OnsetDetect:
         plt.legend()
         plt.show()
 
-    def _plot_envelope_comparison(self, times, *envelopes, global_threshold, moving_threshold):
+    def _plot_envelope_comparison(
+        self, times, *envelopes, global_threshold, moving_threshold
+    ):
         """Plot all non-hybrid envelopes for comparison."""
         D = np.abs(librosa.stft(self._array))
         _, ax = plt.subplots(nrows=2, sharex=True)
@@ -347,10 +349,16 @@ class OnsetDetect:
         spacing = 1
         for envelope in envelopes:
             ax[1].plot(times, envelope[0], color=envelope[2])
-            ax[1].plot(times, spacing + envelope[0], label=envelope[1], color=envelope[2])
+            ax[1].plot(
+                times, spacing + envelope[0], label=envelope[1], color=envelope[2]
+            )
             spacing += 1
-        ax[1].axhline(y=global_threshold, color="r", label="Global threshold", linewidth=1)
-        ax[1].plot(times, moving_threshold, color="r", label="Moving threshold", linewidth=1)
+        ax[1].axhline(
+            y=global_threshold, color="r", label="Global threshold", linewidth=1
+        )
+        ax[1].plot(
+            times, moving_threshold, color="r", label="Moving threshold", linewidth=1
+        )
         plt.legend()
         plt.show()
 
@@ -370,7 +378,9 @@ class OnsetDetect:
             ax[1].plot(times, 1 + envelope[0], label=envelope[1], color=envelope[2])
 
         for envelope in envelopes:
-            ax[1].plot(times, self._median_filter(envelope[0], kernel_size=filter_kernel))
+            ax[1].plot(
+                times, self._median_filter(envelope[0], kernel_size=filter_kernel)
+            )
 
         plt.legend()
         plt.show()
@@ -463,7 +473,13 @@ class OnsetDetect:
                 peak_picking=peak_picking,
             )
 
-    def compare(self, compare_parameter: str = "envelopes", threshold_k: float = 2.0, threshold_window: float = 2.0, filter_kernel: int = 3) -> None:
+    def compare(
+        self,
+        compare_parameter: str = "envelopes",
+        threshold_k: float = 2.0,
+        threshold_window: float = 2.0,
+        filter_kernel: int = 3,
+    ) -> None:
         """Compare envelopes."""
         specflux = self._envelope_spectral_flux()
         specflux_diff = self._envelope_diff_spectral_flux()
@@ -479,20 +495,33 @@ class OnsetDetect:
             (rms_delta, "Root-mean-square (delta)", "C3"),
             (chroma_cqt, "CQT chroma", "C4"),
         ]
-        
-        sum_onset = self._envelope_hybrid(*["spectral_flux", "diff_spectral_flux", "diff_rms", "delta_rms", "chroma_cqt"])
+
+        sum_onset = self._envelope_hybrid(
+            *[
+                "spectral_flux",
+                "diff_spectral_flux",
+                "diff_rms",
+                "delta_rms",
+                "chroma_cqt",
+            ]
+        )
 
         global_threshold = self._global_mad_threshold(
-                onset_envelope=sum_onset, k_factor=threshold_k
-                )
+            onset_envelope=sum_onset, k_factor=threshold_k
+        )
         moving_threshold = self._moving_mad_threshold(
-                onset_envelope=sum_onset,
-                k_factor=threshold_k,
-                window_duration=threshold_window,
-                )
+            onset_envelope=sum_onset,
+            k_factor=threshold_k,
+            window_duration=threshold_window,
+        )
 
         if compare_parameter == "envelopes":
-            self._plot_envelope_comparison(times, *envelopes, global_threshold=global_threshold, moving_threshold=moving_threshold)
+            self._plot_envelope_comparison(
+                times,
+                *envelopes,
+                global_threshold=global_threshold,
+                moving_threshold=moving_threshold,
+            )
         elif compare_parameter == "filtering":
             self._plot_filter_comparison(times, *envelopes, filter_kernel=filter_kernel)
         else:
