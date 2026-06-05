@@ -332,7 +332,7 @@ class OnsetDetect:
         plt.legend()
         plt.show()
 
-    def _plot_envelope_comparison(self, times, *envelopes, spaced_view=True):
+    def _plot_envelope_comparison(self, times, *envelopes, global_threshold, moving_threshold):
         """Plot all non-hybrid envelopes for comparison."""
         D = np.abs(librosa.stft(self._array))
         _, ax = plt.subplots(nrows=2, sharex=True)
@@ -344,11 +344,13 @@ class OnsetDetect:
             sr=self._sample_rate,
         )
 
-        spacing = 0
+        spacing = 1
         for envelope in envelopes:
-            ax[1].plot(times, spacing + envelope[0], label=envelope[1])
-            if spaced_view:
-                spacing += 1
+            ax[1].plot(times, envelope[0], color=envelope[2])
+            ax[1].plot(times, spacing + envelope[0], label=envelope[1], color=envelope[2])
+            spacing += 1
+        ax[1].axhline(y=global_threshold, color="r", label="Global threshold", linewidth=1)
+        ax[1].plot(times, moving_threshold, color="r", label="Moving threshold", linewidth=1)
         plt.legend()
         plt.show()
 
@@ -461,7 +463,7 @@ class OnsetDetect:
                 peak_picking=peak_picking,
             )
 
-    def compare(self, compare_parameter: str = "envelopes") -> None:
+    def compare(self, compare_parameter: str = "envelopes", threshold_k: float = 2.0, threshold_window: float = 2.0) -> None:
         """Compare envelopes."""
         # TODO: implement plotting
         # TODO: potential support for ground truth and statistical comparison to that?
@@ -479,9 +481,20 @@ class OnsetDetect:
             (rms_delta, "Root-mean-square (delta)", "C3"),
             (chroma_cqt, "CQT chroma", "C4"),
         ]
+        
+        sum_onset = self._envelope_hybrid(*["spectral_flux", "diff_spectral_flux", "diff_rms", "delta_rms", "chroma_cqt"])
+
+        global_threshold = self._global_mad_threshold(
+                onset_envelope=sum_onset, k_factor=threshold_k
+                )
+        moving_threshold = self._moving_mad_threshold(
+                onset_envelope=sum_onset,
+                k_factor=threshold_k,
+                window_duration=threshold_window,
+                )
 
         if compare_parameter == "envelopes":
-            self._plot_envelope_comparison(times, *envelopes, spaced_view=True)
+            self._plot_envelope_comparison(times, *envelopes, global_threshold=global_threshold, moving_threshold=moving_threshold)
         elif compare_parameter == "filtering":
             self._plot_filter_comparison(times, *envelopes)
         else:
@@ -492,7 +505,7 @@ if __name__ == "__main__":
     # TODO: set default behaviour
     # fp = "data/02-Orsa-storpolska.mp3"
     fp = "data/rytel-A1.wav"
-    # OnsetDetect(fp, start=0, end=15).compare(compare_parameter="envelopes")
+    OnsetDetect(fp, start=0, end=15).compare(compare_parameter="envelopes", threshold_k=0.9)
     # OnsetDetect(fp, start=4.6, end=14.6).compare(compare_parameter="filtering")
     OnsetDetect(fp, start=0, end=15).detect_onsets(
         envelope="hybrid",
