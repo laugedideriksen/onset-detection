@@ -12,6 +12,7 @@ class OnsetDetect:
     def __init__(
         self, sound_file: str, title="", start: float = 0, end: float | None = None
     ) -> None:
+        """Load soundfile and create OnsetDetect object"""
         self.sound_file = sound_file
         self.start = start
         self.end = end
@@ -57,8 +58,10 @@ class OnsetDetect:
         self._end = value
 
     # ENVELOPES
+    # The output of all envelopes is normalised.
 
     def _envelope_spectral_flux(self):
+        """Compute an envelope based on spectral flux"""
         spectral_flux_envelope = librosa.onset.onset_strength(
             y=self._array, sr=self._sample_rate
         )
@@ -68,6 +71,7 @@ class OnsetDetect:
         return spectral_flux_envelope
 
     def _envelope_diff_spectral_flux(self):
+        """Compute an envelope that is the derivative of the spectral flux envelope"""
         spectral_flux_envelope = librosa.onset.onset_strength(
             y=self._array, sr=self._sample_rate
         )
@@ -80,7 +84,7 @@ class OnsetDetect:
         return diff_specflux_envelope
 
     def _envelope_diff_rms(self, frame_length=2048):
-        """Differential root-mean-square envelope"""
+        """Compute an envelope that is the derivative of a root-mean-square envelope"""
         rms = librosa.feature.rms(
             y=self._array, frame_length=frame_length, hop_length=512
         )[0]
@@ -91,6 +95,7 @@ class OnsetDetect:
         return rms_diff_envelope
 
     def _envelope_delta_rms(self, frame_length=2048):
+        """Compute an envelope based on the delta between frames"""
         rms = librosa.feature.rms(
             y=self._array, frame_length=frame_length, hop_length=512
         )[0]
@@ -104,6 +109,7 @@ class OnsetDetect:
         return rms_delta_envelope
 
     def _envelope_chroma_cqt(self):
+        """Compute envelope based on a constant-Q chromagram"""
         chroma_cqt = librosa.feature.chroma_cqt(
             y=self._array, sr=self._sample_rate, hop_length=512
         )
@@ -114,7 +120,7 @@ class OnsetDetect:
         return chroma_envelope
 
     def _envelope_hybrid(self, *envelopes):
-        """Create a hybrid envelope by adding together other, normalised envelopes"""
+        """Create a hybrid envelope by adding together normalised envelopes"""
         hybrid_envelope = []
         for i in envelopes:
             if i == "spectral_flux":
@@ -129,6 +135,7 @@ class OnsetDetect:
                 envelope = np.array(self._envelope_chroma_cqt())
             hybrid_envelope.append(envelope)
         hybrid_envelope = np.sum(np.vstack(hybrid_envelope), axis=0)
+        hybrid_envelope = hybrid_envelope / (np.max(hybrid_envelope) + 1e-6)
         return hybrid_envelope
 
     # FILTERING
@@ -139,7 +146,7 @@ class OnsetDetect:
     # THRESHOLD
 
     def _global_mad_threshold(self, onset_envelope, k_factor=2.0):
-        """Compute a moving threshold"""
+        """Compute a global threshold"""
         median = np.median(onset_envelope)
         mad = median_abs_deviation(onset_envelope)
         k = k_factor
@@ -148,6 +155,7 @@ class OnsetDetect:
         return threshold
 
     def _moving_mad_threshold(self, onset_envelope, window_duration=2.0, k_factor=2.0):
+        """Compute moving threshold."""
         window = int(window_duration * self._sample_rate / 512)
         window_median = median_filter(onset_envelope, size=window, mode="nearest")
         window_mad = generic_filter(
@@ -159,6 +167,7 @@ class OnsetDetect:
     # ONSET DETECTION
 
     def _centroid_peak_pick(self, onset_envelope, threshold):
+        """Pick loudest frame of detected event"""
         indices_above_threshold = np.where(onset_envelope > threshold)[0]
         detected_onset_frames = []
         if len(indices_above_threshold) > 0:
@@ -180,6 +189,7 @@ class OnsetDetect:
         return detected_onset_times
 
     def _backtrack_peak_pick(self, onset_envelope, threshold):
+        """Peak pick using threshold, but backtrack to local minimum on entire envelope"""
         indices_above_threshold = np.where(onset_envelope > threshold)[0]
         detected_onset_frames = []
         if len(indices_above_threshold) > 0:
@@ -190,18 +200,22 @@ class OnsetDetect:
                 if idx - previous_idx <= 1:
                     current_event.append(idx)
                 else:
-                    first_frame = current_event[0]
-                    detected_onset_frames.append(first_frame)
+                    j = current_event[0]
+                    while (onset_envelope[j] - onset_envelope[j - 1]) > 0:
+                        j -= 1
+                    detected_onset_frames.append(j)
                     current_event = [idx]
-        first_frame = current_event[0]
-        detected_onset_frames.append(first_frame)
-        print(detected_onset_frames)
+        j = current_event[0]
+        while (onset_envelope[j] - onset_envelope[j - 1]) > 0:
+            j -= 1
+        detected_onset_frames.append(j)
         detected_onset_times = librosa.frames_to_time(
             np.array(detected_onset_frames), sr=self._sample_rate
         )
         return detected_onset_times
 
     def _librosa_peak_pick(self, onset_envelope):
+        """Use Librosa's built-in peak picker. Note: this disables the threshold filter"""
         onset_timestamps = librosa.util.peak_pick(
             onset_envelope,
             pre_max=5,
@@ -216,7 +230,7 @@ class OnsetDetect:
         return onset_timestamps, threshold
 
     def _merge_onsets(self, onset_timestamps, min_note_gap=0.08):
-        # Merge near-simultaneous detections
+        """Merge near-simultaneous detections. Usually best left disabled."""
         minimum_note_gap = min_note_gap  # in miliseconds
 
         final_onset_timestamps = []
@@ -242,6 +256,7 @@ class OnsetDetect:
     # OUTPUT
 
     def _output(self, output_type, output_destination, onset_timestamps):
+        """Output onset timestamps as Python list, as CSV-liske rows, or as a CSV file."""
         onset_timestamps = np.array(onset_timestamps) + self.start
         onset_timestamps = onset_timestamps.tolist()
         if output_type == "list":
@@ -264,6 +279,7 @@ class OnsetDetect:
     def _plot(
         self, onset_timestamps, onset_envelope, threshold, threshold_type, peak_picking
     ):
+        """Plot spectrogram, envelope, threshold (if applicable), and onsets"""
         times = librosa.frames_to_time(
             np.arange(len(onset_envelope)), sr=self._sample_rate
         )
@@ -296,6 +312,8 @@ class OnsetDetect:
 
         # Graph onset envelope
         ax[1].plot(times, onset_envelope, label="Onset envelope")
+        # ax[1].plot(times, np.insert(np.diff(onset_envelope), 0, 0, axis=0), label='env_diff')
+
         ax[1].vlines(
             onset_timestamps,
             0,
@@ -315,6 +333,7 @@ class OnsetDetect:
         plt.show()
 
     def _plot_envelope_comparison(self, times, *envelopes, spaced_view=True):
+        """Plot all non-hybrid envelopes for comparison."""
         D = np.abs(librosa.stft(self._array))
         _, ax = plt.subplots(nrows=2, sharex=True)
         librosa.display.specshow(
@@ -334,7 +353,7 @@ class OnsetDetect:
         plt.show()
 
     def _plot_filter_comparison(self, times, *envelopes):
-        # TODO: Plot every different envelope and output.
+        """Plot filtered and unfiltered envelopes."""
         D = np.abs(librosa.stft(self._array))
         _, ax = plt.subplots(nrows=2, sharex=True)
         librosa.display.specshow(
@@ -365,13 +384,14 @@ class OnsetDetect:
         filter_kernel: int = 3,
         threshold_k: float = 2.0,
         threshold_type: str = "global",
+        threshold_window: float = 2.0,
         peak_picking: str = "backtrack",
         merge_onsets: bool = False,
         output: str = "list",
         output_destination: str | bool = False,
         plot: bool = True,
-    ) -> None:
-        # TODO: implement detection logic
+    ) -> str | None:
+        """Select envelope, adjust parameters, detect onsets, and plot results."""
         if envelope == "spectral_flux":
             onset_envelope = self._envelope_spectral_flux()
         elif envelope == "diff_spectral_flux":
@@ -400,7 +420,9 @@ class OnsetDetect:
             )
         elif threshold_type == "moving":
             threshold = self._moving_mad_threshold(
-                onset_envelope=onset_envelope, k_factor=threshold_k, window_duration=10
+                onset_envelope=onset_envelope,
+                k_factor=threshold_k,
+                window_duration=threshold_window,
             )
         else:
             raise ValueError(f"{threshold_type} is not a supported threshold type.")
@@ -439,6 +461,7 @@ class OnsetDetect:
             )
 
     def compare(self, compare_parameter: str = "envelopes") -> None:
+        """Compare envelopes."""
         # TODO: implement plotting
         # TODO: potential support for ground truth and statistical comparison to that?
         specflux = self._envelope_spectral_flux()
@@ -457,7 +480,7 @@ class OnsetDetect:
         ]
 
         if compare_parameter == "envelopes":
-            self._plot_envelope_comparison(times, *envelopes, spaced_view=False)
+            self._plot_envelope_comparison(times, *envelopes, spaced_view=True)
         elif compare_parameter == "filtering":
             self._plot_filter_comparison(times, *envelopes)
         else:
@@ -466,15 +489,19 @@ class OnsetDetect:
 
 if __name__ == "__main__":
     # TODO: set default behaviour
-    fp = "data/02-Orsa-storpolska.mp3"
-    OnsetDetect(fp, start=0, end=15).compare(compare_parameter="envelopes")
+    # fp = "data/02-Orsa-storpolska.mp3"
+    fp = "data/rytel-A1.wav"
+    # OnsetDetect(fp, start=0, end=15).compare(compare_parameter="envelopes")
     # OnsetDetect(fp, start=4.6, end=14.6).compare(compare_parameter="filtering")
     OnsetDetect(fp, start=0, end=15).detect_onsets(
         envelope="hybrid",
-        hybrid_env_components=["spectral_flux", "diff_rms"],
+        hybrid_env_components=["spectral_flux", "diff_rms", "chroma_cqt"],
         output="rows",
-        threshold_k=1.0,
+        filtering="median_filter",
+        filter_kernel=3,
+        threshold_k=0.9,
         threshold_type="moving",
+        threshold_window=1.0,
         peak_picking="backtrack",
         merge_onsets=False,
     )
