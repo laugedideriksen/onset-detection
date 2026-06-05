@@ -354,7 +354,7 @@ class OnsetDetect:
         plt.legend()
         plt.show()
 
-    def _plot_filter_comparison(self, times, *envelopes):
+    def _plot_filter_comparison(self, times, *envelopes, filter_kernel):
         """Plot filtered and unfiltered envelopes."""
         D = np.abs(librosa.stft(self._array))
         _, ax = plt.subplots(nrows=2, sharex=True)
@@ -370,7 +370,7 @@ class OnsetDetect:
             ax[1].plot(times, 1 + envelope[0], label=envelope[1], color=envelope[2])
 
         for envelope in envelopes:
-            ax[1].plot(times, self._median_filter(envelope[0]))
+            ax[1].plot(times, self._median_filter(envelope[0], kernel_size=filter_kernel))
 
         plt.legend()
         plt.show()
@@ -384,9 +384,9 @@ class OnsetDetect:
         hybrid_env_components: list = ["spectral_flux", "delta_rms"],
         filtering: str = "median_filter",
         filter_kernel: int = 3,
-        threshold_k: float = 2.0,
+        threshold_k: float = 0.9,
         threshold_type: str = "global",
-        threshold_window: float = 2.0,
+        threshold_window: float = 1.0,
         peak_picking: str = "backtrack",
         merge_onsets: bool = False,
         min_note_gap: float = 0.08,
@@ -463,10 +463,8 @@ class OnsetDetect:
                 peak_picking=peak_picking,
             )
 
-    def compare(self, compare_parameter: str = "envelopes", threshold_k: float = 2.0, threshold_window: float = 2.0) -> None:
+    def compare(self, compare_parameter: str = "envelopes", threshold_k: float = 2.0, threshold_window: float = 2.0, filter_kernel: int = 3) -> None:
         """Compare envelopes."""
-        # TODO: implement plotting
-        # TODO: potential support for ground truth and statistical comparison to that?
         specflux = self._envelope_spectral_flux()
         specflux_diff = self._envelope_diff_spectral_flux()
         rms_diff = self._envelope_diff_rms()
@@ -496,7 +494,7 @@ class OnsetDetect:
         if compare_parameter == "envelopes":
             self._plot_envelope_comparison(times, *envelopes, global_threshold=global_threshold, moving_threshold=moving_threshold)
         elif compare_parameter == "filtering":
-            self._plot_filter_comparison(times, *envelopes)
+            self._plot_filter_comparison(times, *envelopes, filter_kernel=filter_kernel)
         else:
             raise ValueError(f"{compare_parameter} is not a valid parameter to compare")
 
@@ -506,7 +504,7 @@ if __name__ == "__main__":
     # fp = "data/02-Orsa-storpolska.mp3"
     fp = "data/rytel-A1.wav"
     OnsetDetect(fp, start=0, end=15).compare(compare_parameter="envelopes", threshold_k=0.9)
-    # OnsetDetect(fp, start=4.6, end=14.6).compare(compare_parameter="filtering")
+    OnsetDetect(fp, start=4.6, end=14.6).compare(compare_parameter="filtering")
     OnsetDetect(fp, start=0, end=15).detect_onsets(
         envelope="hybrid",
         hybrid_env_components=["spectral_flux", "diff_rms", "chroma_cqt"],
