@@ -229,7 +229,7 @@ class OnsetDetect:
         threshold = 0
         return onset_timestamps, threshold
 
-    def _merge_onsets(self, onset_timestamps, min_note_gap=0.08):
+    def _merge_onsets(self, onset_timestamps, min_note_gap):
         """Merge near-simultaneous detections. Usually best left disabled."""
         minimum_note_gap = min_note_gap  # in miliseconds
 
@@ -387,6 +387,7 @@ class OnsetDetect:
         threshold_window: float = 2.0,
         peak_picking: str = "backtrack",
         merge_onsets: bool = False,
+        min_note_gap: float = 0.08,
         output: str = "list",
         output_destination: str | bool = False,
         plot: bool = True,
@@ -442,7 +443,7 @@ class OnsetDetect:
 
         if merge_onsets:
             onset_timestamps = self._merge_onsets(
-                onset_timestamps=onset_timestamps, min_note_gap=0.08
+                onset_timestamps=onset_timestamps, min_note_gap=min_note_gap
             )
 
         self._output(
