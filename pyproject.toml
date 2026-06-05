@@ -1,7 +1,11 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "onsetextractor"
 version = "0.1.0"
-description = "Add your description here"
+description = "A moderately over-engineered onset-detection script."
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
@@ -9,3 +13,6 @@ dependencies = [
     "librosa>=0.11.0",
     "matplotlib>=3.10.9",
 ]
+
+[project.scripts]
+onset-detect = "cli:main"
