@@ -48,3 +48,6 @@ recording.detect_onsets(
 | `min_note_gap` | float | `0.08` | Minimum seconds between distinct notes. |
 | `output` | str | `"list"` | Output format: `list`, `rows`, or `csv`. |
 | `plot` | bool | `True` | Display visualisation. |
+
+## Requirements
+A python installation with [`librosa`](https://github.com/librosa/librosa) SciPy, NumPy, and Matplotlib.
