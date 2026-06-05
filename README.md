@@ -2,6 +2,9 @@ A moderately overengineered Python tool for onset detection and visualisation. U
 
 Be advised that this project is still very much in development!
 
+**Envelope comparison**
+![
+
 ## Quick Start
 CLI:
 ```bash
@@ -42,4 +45,3 @@ recording.detect_onsets(
 | `min_note_gap` | float | `0.08` | Minimum seconds between distinct notes. |
 | `output` | str | `"list"` | Output format: `list`, `rows`, or `csv`. |
 | `plot` | bool | `True` | Display visualisation. |
-
