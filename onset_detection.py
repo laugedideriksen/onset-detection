@@ -497,23 +497,3 @@ class OnsetDetect:
             self._plot_filter_comparison(times, *envelopes, filter_kernel=filter_kernel)
         else:
             raise ValueError(f"{compare_parameter} is not a valid parameter to compare")
-
-
-if __name__ == "__main__":
-    # TODO: set default behaviour
-    # fp = "data/02-Orsa-storpolska.mp3"
-    fp = "data/rytel-A1.wav"
-    OnsetDetect(fp, start=0, end=15).compare(compare_parameter="envelopes", threshold_k=0.9)
-    OnsetDetect(fp, start=4.6, end=14.6).compare(compare_parameter="filtering")
-    OnsetDetect(fp, start=0, end=15).detect_onsets(
-        envelope="hybrid",
-        hybrid_env_components=["spectral_flux", "diff_rms", "chroma_cqt"],
-        output="rows",
-        filtering="median_filter",
-        filter_kernel=3,
-        threshold_k=0.9,
-        threshold_type="moving",
-        threshold_window=1.0,
-        peak_picking="backtrack",
-        merge_onsets=False,
-    )
