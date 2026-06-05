@@ -189,7 +189,7 @@ class OnsetDetect:
         return detected_onset_times
 
     def _backtrack_peak_pick(self, onset_envelope, threshold):
-        """Pick first fram of detected event."""
+        """Pick first frame of detected event."""
         #TODO: Backtrack to local minimum in envelope, not in envelope over threshold!
         indices_above_threshold = np.where(onset_envelope > threshold)[0]
         detected_onset_frames = []
@@ -206,6 +206,32 @@ class OnsetDetect:
                     current_event = [idx]
         first_frame = current_event[0]
         detected_onset_frames.append(first_frame)
+        detected_onset_times = librosa.frames_to_time(
+            np.array(detected_onset_frames), sr=self._sample_rate
+        )
+        return detected_onset_times
+
+    def _backtrack_pp_beyond_threshold(self, onset_envelope, threshold):
+        """Peak pick using threshold, but backtrack to local minimum on entire envelope"""
+        indices_above_threshold = np.where(onset_envelope > threshold)[0]
+        detected_onset_frames = []
+        if len(indices_above_threshold) > 0:
+            current_event = [indices_above_threshold[0]]
+            for i in range(1, len(indices_above_threshold)):
+                idx = indices_above_threshold[i]
+                previous_idx = indices_above_threshold[i-1]
+                if idx - previous_idx <= 1:
+                    current_event.append(idx)
+                else:
+                    j = current_event[0]
+                    while (onset_envelope[j] - onset_envelope[j-1]) > 0:
+                        j -= 1
+                    detected_onset_frames.append(j)
+                    current_event = [idx]
+        j = current_event[0]
+        while (onset_envelope[j] - onset_envelope[j-1]) > 0:
+            j -= 1
+        detected_onset_frames.append(j)
         detected_onset_times = librosa.frames_to_time(
             np.array(detected_onset_frames), sr=self._sample_rate
         )
@@ -430,6 +456,8 @@ class OnsetDetect:
             onset_timestamps = self._backtrack_peak_pick(
                 onset_envelope=onset_envelope, threshold=threshold
             )
+        elif peak_picking == "backtrack_beyond_threshold":
+            onset_timestamps = self._backtrack_pp_beyond_threshold(onset_envelope=onset_envelope, threshold=threshold)
         elif peak_picking == "librosa":
             onset_timestamps, threshold = self._librosa_peak_pick(
                 onset_envelope=onset_envelope
@@ -497,6 +525,6 @@ if __name__ == "__main__":
         threshold_k=0.9,
         threshold_type="moving",
         threshold_window=1.0,
-        peak_picking="backtrack",
+        peak_picking="backtrack_beyond_threshold",
         merge_onsets=False,
     )
