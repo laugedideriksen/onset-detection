@@ -6,13 +6,13 @@ from onset_detection import OnsetDetect
 def run_detect(args):
     """Wrapper for detect_onsets method."""
     try:
-        audio = OnsetDetect(
+        detector_object = OnsetDetect(
             sound_file=args.sound_file, title=args.title, start=args.start, end=args.end, hop_length=args.hop_length
         )
 
         do_plot = not args.no_plot
 
-        audio.detect_onsets(
+        detector_object.detect_onsets(
             envelope=args.envelope,
             hybrid_env_components=args.components,
             filtering=args.filtering,
@@ -39,10 +39,10 @@ def run_detect(args):
 def run_env_comp(args):
     """Wrapper for detect_onsets method."""
     try:
-        audio = OnsetDetect(
+        detector_object = OnsetDetect(
             sound_file=args.sound_file, title=args.title, start=args.start, end=args.end, hop_length=args.hop_length
         )
-        audio.compare(
+        detector_object.compare(
             compare_parameter="envelopes",
             threshold_k=args.threshold_k,
             threshold_window=args.threshold_window,
@@ -59,10 +59,10 @@ def run_env_comp(args):
 def run_filter_comp(args):
     """Wrapper for detect_onsets method."""
     try:
-        audio = OnsetDetect(
+        detector_object = OnsetDetect(
             sound_file=args.sound_file, title=args.title, start=args.start, end=args.end, hop_length=args.hop_length
         )
-        audio.compare(compare_parameter="filtering", filter_kernel=args.filter_kernel)
+        detector_object.compare(compare_parameter="filtering", filter_kernel=args.filter_kernel)
 
     except FileNotFoundError as e:
         print(f"Error: {e}", file=sys.stderr)
@@ -74,7 +74,7 @@ def run_filter_comp(args):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="A moderately over-engineered onset-detection script.",
+        description="A moderately over-engineered tool for onset-detection and envelope visualisation.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
             Examples:
@@ -237,7 +237,7 @@ def main():
     # ENVELOPE COMPARISON
     ec_parser = subparsers.add_parser(
         "compare-envelopes",
-        help="Detect onsets in audio file, output results, and optionally plot spectrogram envelope, and onsets.",
+        help="Visually compare different envelopes for an audio file.",
     )
 
     # Optional arguments for parameters.
@@ -274,13 +274,13 @@ def main():
     ec_parser.add_argument(
         "--threshold-k",
         type=float,
-        default=2.0,
+        default=0.9,
         help="Sensitivity factor (k). Lower value = more sensitive onset detection (default: 0.9).",
     )
     ec_parser.add_argument(
         "--threshold-window",
         type=float,
-        default=2.0,
+        default=1.0,
         help="Size of window for moving threshold in seconds (default: 1.0)",
     )
 
@@ -289,7 +289,7 @@ def main():
     # FILTER COMPARISON
     fc_parser = subparsers.add_parser(
         "compare-filtering",
-        help="Detect onsets in audio file, output results, and optionally plot spectrogram envelope, and onsets.",
+        help="Visually compare filtered and unfiltered envelopes for a soundfile",
     )
 
     # Optional arguments for parameters.

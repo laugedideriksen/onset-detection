@@ -96,10 +96,10 @@ class OnsetDetect:
         )
         return diff_specflux_envelope
 
-    def _envelope_diff_rms(self, frame_length=2048):
+    def _envelope_diff_rms(self):
         """Compute an envelope that is the derivative of a root-mean-square envelope"""
         rms = librosa.feature.rms(
-            y=self._array, frame_length=frame_length, hop_length=self.hop_length
+            y=self._array, frame_length=(self.hop_length * 4), hop_length=self.hop_length
         )[0]
         rms_diff = np.diff(rms)
         rms_diff_rising = np.maximum(0, rms_diff)
@@ -107,10 +107,10 @@ class OnsetDetect:
         rms_diff_envelope = rms_diff_envelope / (np.max(rms_diff_envelope) + 1e-6)
         return rms_diff_envelope
 
-    def _envelope_delta_rms(self, frame_length=2048):
+    def _envelope_delta_rms(self):
         """Compute an envelope based on the delta between frames"""
         rms = librosa.feature.rms(
-            y=self._array, frame_length=frame_length, hop_length=self.hop_length
+            y=self._array, frame_length=(self.hop_length * 4), hop_length=self.hop_length
         )[0]
         delta_window = 4
         smoothed_rms = np.convolve(
@@ -169,7 +169,7 @@ class OnsetDetect:
 
     def _moving_mad_threshold(self, onset_envelope, window_duration=2.0, k_factor=2.0):
         """Compute moving threshold."""
-        window = int(window_duration * self._sample_rate / 512)
+        window = int(window_duration * self._sample_rate / self.hop_length)
         window_median = median_filter(onset_envelope, size=window, mode="nearest")
         window_mad = generic_filter(
             onset_envelope, median_abs_deviation, size=window, mode="nearest"
@@ -191,13 +191,17 @@ class OnsetDetect:
                 if idx - previous_idx <= 1:
                     current_event.append(idx)
                 else:
-                    loudest_frame = max(current_event, key=lambda f: onset_envelope[f])
+                    event_frames = np.array(current_event)
+                    best_idx = np.argmax(onset_envelope[event_frames])
+                    loudest_frame = event_frames[best_idx]
                     detected_onset_frames.append(loudest_frame)
                     current_event = [idx]
-        loudest_frame = max(current_event, key=lambda f: onset_envelope[f])
+        event_frames = np.array(current_event)
+        best_idx = np.argmax(onset_envelope[event_frames])
+        loudest_frame = event_frames[best_idx]
         detected_onset_frames.append(loudest_frame)
         detected_onset_times = librosa.frames_to_time(
-            np.array(detected_onset_frames), sr=self._sample_rate
+                np.array(detected_onset_frames), sr=self._sample_rate
         )
         return detected_onset_times
 
@@ -213,13 +217,17 @@ class OnsetDetect:
                 if idx - previous_idx <= 1:
                     current_event.append(idx)
                 else:
-                    j = max(current_event, key=lambda f: onset_envelope[f])
-                    while (onset_envelope[j] - onset_envelope[j - 1]) > 0:
+                    event_frames = np.array(current_event)
+                    best_idx = np.argmax(onset_envelope[event_frames])
+                    j = event_frames[best_idx]
+                    while j > 0 and (onset_envelope[j] - onset_envelope[j - 1]) > 0:
                         j -= 1
                     detected_onset_frames.append(j)
                     current_event = [idx]
-        j = max(current_event, key=lambda f: onset_envelope[f])
-        while (onset_envelope[j] - onset_envelope[j - 1]) > 0:
+        event_frames = np.array(current_event)
+        best_idx = np.argmax(onset_envelope[event_frames])
+        j = event_frames[best_idx]
+        while j > 0 and (onset_envelope[j] - onset_envelope[j - 1]) > 0:
             j -= 1
         detected_onset_frames.append(j)
         detected_onset_times = librosa.frames_to_time(
@@ -247,24 +255,21 @@ class OnsetDetect:
         minimum_note_gap = min_note_gap  # in miliseconds
 
         final_onset_timestamps = []
-        try:
-            detected_onset_times = np.sort(onset_timestamps)
-            current_onset_cluster = [detected_onset_times[0]]
+        detected_onset_times = np.sort(onset_timestamps)
+        current_onset_cluster = [detected_onset_times[0]]
 
-            for i in range(1, len(detected_onset_times)):
-                timestamp = detected_onset_times[i]
-                previous_timestamp = detected_onset_times[i - 1]
+        for i in range(1, len(detected_onset_times)):
+            timestamp = detected_onset_times[i]
+            previous_timestamp = detected_onset_times[i - 1]
 
-                if timestamp - previous_timestamp < minimum_note_gap:
-                    current_onset_cluster.append(timestamp)
-                else:
-                    centroid_onset = np.mean(current_onset_cluster)
-                    final_onset_timestamps.append(centroid_onset)
-                    current_onset_cluster = [timestamp]
-            final_onset_timestamps.append(np.mean(current_onset_cluster))
-            return final_onset_timestamps
-        except Exception as e:
-            raise e
+            if timestamp - previous_timestamp < minimum_note_gap:
+                current_onset_cluster.append(timestamp)
+            else:
+                centroid_onset = np.mean(current_onset_cluster)
+                final_onset_timestamps.append(centroid_onset)
+                current_onset_cluster = [timestamp]
+        final_onset_timestamps.append(np.mean(current_onset_cluster))
+        return final_onset_timestamps
 
     # OUTPUT
 
@@ -415,7 +420,7 @@ class OnsetDetect:
         merge_onsets: bool = False,
         min_note_gap: float = 0.08,
         output: str = "list",
-        output_destination: str | bool = False,
+        output_destination: str | None = None,
         plot: bool = True,
     ) -> str | None:
         """Select envelope, adjust parameters, detect onsets, and plot results."""

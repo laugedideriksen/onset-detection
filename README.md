@@ -13,9 +13,9 @@ CLI:
 ```bash
 python cli.py compare-envelopes path-to-recording # compare different envelopes
 python cli.py compare-filtering path-to-recording # compare filtered and unfiltered envelopes
-python cli.py detect path-to-recording # detect onsets using default settings
+python cli.py detect-onsets path-to-recording # detect onsets using default settings
 
-python cli.py detect -h # display help
+python cli.py detect-onsets -h # display help
 ```
 
 In Python:
@@ -49,5 +49,6 @@ recording.detect_onsets(
 | `output` | str | `"list"` | Output format: `list`, `rows`, or `csv`. |
 | `plot` | bool | `True` | Display visualisation. |
 
-## Requirements
-A python installation with [`librosa`](https://github.com/librosa/librosa) SciPy, NumPy, and Matplotlib.
+## Installation and Requirements
+This project requires a python installation with [`librosa`](https://github.com/librosa/librosa) SciPy, NumPy, and Matplotlib.
+It can be run as is or installed locally by running `pip install -e .` in the project directory.
