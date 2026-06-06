@@ -7,7 +7,7 @@ def run_detect(args):
     """Wrapper for detect_onsets method."""
     try:
         audio = OnsetDetect(
-            sound_file=args.sound_file, title=args.title, start=args.start, end=args.end
+            sound_file=args.sound_file, title=args.title, start=args.start, end=args.end, hop_length=args.hop_length
         )
 
         do_plot = not args.no_plot
@@ -40,7 +40,7 @@ def run_env_comp(args):
     """Wrapper for detect_onsets method."""
     try:
         audio = OnsetDetect(
-            sound_file=args.sound_file, title=args.title, start=args.start, end=args.end
+            sound_file=args.sound_file, title=args.title, start=args.start, end=args.end, hop_length=args.hop_length
         )
         audio.compare(
             compare_parameter="envelopes",
@@ -60,7 +60,7 @@ def run_filter_comp(args):
     """Wrapper for detect_onsets method."""
     try:
         audio = OnsetDetect(
-            sound_file=args.sound_file, title=args.title, start=args.start, end=args.end
+            sound_file=args.sound_file, title=args.title, start=args.start, end=args.end, hop_length=args.hop_length
         )
         audio.compare(compare_parameter="filtering", filter_kernel=args.filter_kernel)
 
@@ -120,14 +120,18 @@ def main():
         default=None,
         help="End time in seconds (default: full file).",
     )
-
-    # File Information
     od_parser.add_argument(
         "--title",
         type=str,
         default="",
         help="Title of recording to be displayed in plot/output.",
     )
+    od_parser.add_argument(
+            "--hop-length",
+            type=int,
+            default=512,
+            help="Hop_length for computing envelopes (default: 512)."
+            )
 
     # Envelope
     od_parser.add_argument(
@@ -253,14 +257,18 @@ def main():
         default=None,
         help="End time in seconds (default: full file).",
     )
-
-    # File Information
     ec_parser.add_argument(
-        "--title",
-        type=str,
-        default="",
-        help="Title of recording to be displayed in plot/output.",
-    )
+            "--title",
+            type=str,
+            default="",
+            help="Title of recording to be displayed in plot/output.",
+            )
+    ec_parser.add_argument(
+            "--hop-length",
+            type=int,
+            default=512,
+            help="Hop_length for computing envelopes (default: 512)."
+            )
 
     # Threshold
     ec_parser.add_argument(
@@ -301,14 +309,18 @@ def main():
         default=None,
         help="End time in seconds (default: full file).",
     )
-
-    # File Information
     fc_parser.add_argument(
-        "--title",
-        type=str,
-        default="",
-        help="Title of recording to be displayed in plot/output.",
-    )
+            "--title",
+            type=str,
+            default="",
+            help="Title of recording to be displayed in plot/output.",
+            )
+    fc_parser.add_argument(
+            "--hop-length",
+            type=int,
+            default=512,
+            help="Hop_length for computing envelopes (default: 512)."
+            )
 
     # Filtering
     fc_parser.add_argument(

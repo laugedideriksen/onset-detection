@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 
 class OnsetDetect:
     def __init__(
-        self, sound_file: str, title="", start: float = 0, end: float | None = None
+            self, sound_file: str, title="", start: float = 0, end: float | None = None, hop_length: int = 512
     ) -> None:
         """Load soundfile and create OnsetDetect object"""
         self.sound_file = sound_file
@@ -21,6 +21,7 @@ class OnsetDetect:
             sound_file, offset=self.start, duration=duration
         )
         self.title = title
+        self.hop_length = hop_length
 
     @property
     def sound_file(self):
@@ -57,6 +58,18 @@ class OnsetDetect:
             raise ValueError("The value of end must be greater than the value of start")
         self._end = value
 
+    @property
+    def hop_length(self):
+        """The hop_length property."""
+        return self._hop_length
+
+    @hop_length.setter
+    def hop_length(self, value):
+        if int(value) and value > 0:
+            self._hop_length = value
+        else:
+            raise ValueError("hop_length must be a positive integer.")
+
     # ENVELOPES
     # The output of all envelopes is normalised.
 
@@ -86,7 +99,7 @@ class OnsetDetect:
     def _envelope_diff_rms(self, frame_length=2048):
         """Compute an envelope that is the derivative of a root-mean-square envelope"""
         rms = librosa.feature.rms(
-            y=self._array, frame_length=frame_length, hop_length=512
+            y=self._array, frame_length=frame_length, hop_length=self.hop_length
         )[0]
         rms_diff = np.diff(rms)
         rms_diff_rising = np.maximum(0, rms_diff)
@@ -97,7 +110,7 @@ class OnsetDetect:
     def _envelope_delta_rms(self, frame_length=2048):
         """Compute an envelope based on the delta between frames"""
         rms = librosa.feature.rms(
-            y=self._array, frame_length=frame_length, hop_length=512
+            y=self._array, frame_length=frame_length, hop_length=self.hop_length
         )[0]
         delta_window = 4
         smoothed_rms = np.convolve(
@@ -111,7 +124,7 @@ class OnsetDetect:
     def _envelope_chroma_cqt(self):
         """Compute envelope based on a constant-Q chromagram"""
         chroma_cqt = librosa.feature.chroma_cqt(
-            y=self._array, sr=self._sample_rate, hop_length=512
+            y=self._array, sr=self._sample_rate, hop_length=self.hop_length
         )
         chroma_cqt_diff = np.diff(chroma_cqt)
         chroma_cqt_diff = np.maximum(0, chroma_cqt_diff).mean(axis=0)
