@@ -3,10 +3,10 @@ A moderately overengineered Python tool for onset detection and visualisation. U
 Please note that this project is still very much in development!
 
 **Compare envelopes**
-![envelope-comparison](https://github.com/laugedideriksen/onset-detection-script/blob/main/assets/compare_envelopes.png)
+![envelope-comparison](assets/compare_envelopes.png)
 
 **Compare filtered/unfiltered envelopes**
-![compare-filtering](https://github.com/laugedideriksen/onset-detection-script/blob/main/assets/compare_filtering.png)
+![compare-filtering](assets/compare_filtering.png)
 
 ## Quick Start
 CLI:
