@@ -141,6 +141,7 @@ def main():
         choices=[
             "spectral_flux",
             "diff_spectral_flux",
+            "diff_spectral_flux",
             "diff_rms",
             "delta_rms",
             "chroma_cqt",
@@ -176,7 +177,7 @@ def main():
         "--threshold-type",
         type=str,
         default="moving",
-        choices=["global", "moving"],
+        choices=["global", "moving", "absolute"],
         help="Threshold type (default: global).",
     )
     od_parser.add_argument(

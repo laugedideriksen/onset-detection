@@ -156,7 +156,7 @@ class OnsetDetect:
         return onset_envelope
 
     # THRESHOLD
-    def _global_mad_threshold(self, onset_envelope, k_factor=2.0):
+    def _global_mad_threshold(self, onset_envelope, k_factor=0.9):
         """Compute a global threshold"""
         median = np.median(onset_envelope)
         mad = median_abs_deviation(onset_envelope)
@@ -165,7 +165,7 @@ class OnsetDetect:
         threshold = max(threshold, 0)
         return threshold
 
-    def _moving_mad_threshold(self, onset_envelope, window_duration=2.0, k_factor=2.0):
+    def _moving_mad_threshold(self, onset_envelope, window_duration=1.0, k_factor=0.9):
         """Compute moving threshold."""
         window = int(window_duration * self._sample_rate / self.hop_length)
         window_median = median_filter(onset_envelope, size=window, mode="nearest")
@@ -173,6 +173,10 @@ class OnsetDetect:
             onset_envelope, median_abs_deviation, size=window, mode="nearest"
         )
         threshold = window_median + (window_mad * k_factor)
+        return threshold
+
+    def _absolute_threshold(self, k_factor=0.9):
+        threshold = k_factor
         return threshold
 
     # ONSET DETECTION
@@ -337,7 +341,7 @@ class OnsetDetect:
         )
 
         if peak_picking != "librosa":
-            if threshold_type == "global":
+            if threshold_type == "global" or threshold_type == "absolute":
                 ax[1].axhline(y=threshold, color="r", label="Threshold")
             elif threshold_type == "moving":
                 ax[1].plot(times, threshold, color="r", label="Threshold")
@@ -450,6 +454,8 @@ class OnsetDetect:
                 k_factor=threshold_k,
                 window_duration=threshold_window,
             )
+        elif threshold_type == "absolute":
+            threshold = self._absolute_threshold(k_factor=threshold_k)
         else:
             raise ValueError(f"{threshold_type} is not a supported threshold type.")
 
