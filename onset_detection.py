@@ -72,7 +72,6 @@ class OnsetDetect:
 
     # ENVELOPES
     # The output of all envelopes is normalised.
-
     def _envelope_spectral_flux(self):
         """Compute an envelope based on spectral flux"""
         spectral_flux_envelope = librosa.onset.onset_strength(
@@ -157,7 +156,6 @@ class OnsetDetect:
         return onset_envelope
 
     # THRESHOLD
-
     def _global_mad_threshold(self, onset_envelope, k_factor=2.0):
         """Compute a global threshold"""
         median = np.median(onset_envelope)
@@ -178,7 +176,6 @@ class OnsetDetect:
         return threshold
 
     # ONSET DETECTION
-
     def _centroid_peak_pick(self, onset_envelope, threshold):
         """Pick loudest frame of detected event"""
         indices_above_threshold = np.where(onset_envelope > threshold)[0]
@@ -272,7 +269,6 @@ class OnsetDetect:
         return final_onset_timestamps
 
     # OUTPUT
-
     def _output(self, output_type, output_destination, onset_timestamps):
         """Output onset timestamps as Python list, as CSV-liske rows, or as a CSV file."""
         onset_timestamps = np.array(onset_timestamps) + self.start
@@ -293,7 +289,6 @@ class OnsetDetect:
                     csvwriter.writerow([ts, idx])
 
     # VISUALISATION
-
     def _plot(
         self, onset_timestamps, onset_envelope, threshold, threshold_type, peak_picking
     ):
@@ -406,7 +401,6 @@ class OnsetDetect:
         # TODO: mod 1 or remove y-axis labels in lower table.
 
     # PUBLIC METHODS
-
     def detect_onsets(
         self,
         envelope: str = "spectral_flux",
